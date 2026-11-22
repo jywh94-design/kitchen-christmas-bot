@@ -1,6 +1,7 @@
 // 排行榜：排序、取头像和名字、生成图片（60 秒内重复查看会直接用缓存）
 const { getAllParticipantsSummary } = require('./db');
 const { renderRankImage } = require('./rankImage');
+const { resolveMembers } = require('./members');
 
 const CACHE_MS = 60 * 1000;
 const TOP_N = 9;
@@ -21,24 +22,6 @@ function compare(a, b) {
   );
 }
 
-async function resolveMember(guild, userId) {
-  // 测试数据里的模拟玩家
-  if (userId.startsWith('999000')) {
-    return { name: `模拟玩家${userId.slice(-2)}`, avatarUrl: null };
-  }
-  try {
-    const m = await guild.members.fetch(userId);
-    return { name: m.displayName, avatarUrl: m.displayAvatarURL({ extension: 'png', size: 128, forceStatic: true }) };
-  } catch (e) {
-    try {
-      const u = await guild.client.users.fetch(userId);
-      return { name: u.globalName || u.username, avatarUrl: u.displayAvatarURL({ extension: 'png', size: 128, forceStatic: true }) };
-    } catch (e2) {
-      return { name: '神秘厨师', avatarUrl: null };
-    }
-  }
-}
-
 async function fetchAvatar(url) {
   if (!url) return null;
   try {
@@ -55,11 +38,13 @@ async function getRanking(guild, { force = false } = {}) {
 
   const { participants, totalServerTickets, totalEntryUsers } = await getAllParticipantsSummary();
   const sorted = [...participants].sort(compare);
+  const top = sorted.slice(0, TOP_N);
 
+  const info = await resolveMembers(guild, top.map((p) => p.userId));
   const entries = await Promise.all(
-    sorted.slice(0, TOP_N).map(async (p) => {
-      const info = await resolveMember(guild, p.userId);
-      return { name: info.name, tickets: p.totalTickets, avatar: await fetchAvatar(info.avatarUrl) };
+    top.map(async (p) => {
+      const i = info.get(p.userId);
+      return { name: i.name, tickets: p.totalTickets, avatar: await fetchAvatar(i.avatarUrl) };
     })
   );
 

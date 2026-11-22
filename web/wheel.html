@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>圣诞厨房寻宝季 · 幸运转盘</title>
+<style>
+  :root { --pine:#14231C; --pine2:#1F3429; --cream:#F6F1E7; --gold:#E8B84A; --red:#C0392B; --mist:#B9C8BE; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; }
+  body {
+    background: radial-gradient(ellipse at 30% 20%, #234536 0%, var(--pine) 60%, #0d1813 100%);
+    color: var(--cream);
+    font-family: 'Noto Sans SC','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+    overflow: hidden;
+  }
+  header { display:flex; align-items:center; gap:16px; padding:18px 32px; }
+  header h1 { margin:0; font-size: clamp(22px, 2.6vw, 38px); letter-spacing: 2px; }
+  #badge { margin-left:auto; background: var(--gold); color: var(--pine); font-weight:700; padding:4px 14px; border-radius:999px; font-size:18px; }
+  main { display:grid; grid-template-columns: minmax(0,1fr) 360px; gap:24px; padding: 0 32px 24px; height: calc(100% - 76px); }
+  .stage { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; min-height:0; }
+  .wheelwrap { position:relative; width: min(66vh, 58vw); height: min(66vh, 58vw); margin-top:14px; }
+  #wheel { width:100%; height:100%; display:block; filter: drop-shadow(0 12px 30px rgba(0,0,0,.55)); }
+  .pointer { position:absolute; left:50%; top:-10px; transform:translateX(-50%); width:0; height:0;
+    border-left:22px solid transparent; border-right:22px solid transparent; border-top:44px solid var(--gold);
+    filter: drop-shadow(0 3px 4px rgba(0,0,0,.6)); z-index:3; }
+  #ticker { min-height:44px; font-size: clamp(22px, 2.4vw, 36px); font-weight:700; color: var(--gold); text-shadow:0 2px 6px rgba(0,0,0,.6); }
+  #spin { background: linear-gradient(#e24b3b, #b33224); color:#fff; border:3px solid var(--gold); font-size: clamp(22px,2.4vw,34px); font-weight:700;
+    padding: 12px 56px; border-radius: 999px; cursor:pointer; letter-spacing:3px; box-shadow:0 6px 0 #7e2117, 0 10px 24px rgba(0,0,0,.5); }
+  #spin:disabled { filter: grayscale(.85) brightness(.7); cursor:not-allowed; }
+  #spin:not(:disabled):active { transform: translateY(3px); box-shadow:0 3px 0 #7e2117; }
+  #hint { margin:0; min-height:26px; color: var(--mist); font-size:20px; text-align:center; }
+  .side { background: rgba(31,52,41,.75); border:1px solid rgba(232,184,74,.35); border-radius:20px; padding:20px; display:flex; flex-direction:column; min-height:0; }
+  .side h2 { margin:0 0 12px; font-size:26px; }
+  .side h2 small { color: var(--gold); font-size:20px; margin-left:8px; }
+  #winners { list-style:none; margin:0; padding:0; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+  #winners li { display:flex; align-items:center; gap:12px; background: rgba(255,255,255,.06); border-radius:14px; padding:8px 12px; }
+  #winners li.ultimate { background: linear-gradient(90deg, rgba(232,184,74,.35), rgba(255,255,255,.06)); border:1px solid var(--gold); }
+  #winners .place { font-weight:700; color: var(--gold); min-width:34px; font-size:20px; }
+  #winners img, #winners .ph { width:44px; height:44px; border-radius:50%; object-fit:cover; background:#3a5a49; flex:none; }
+  #winners .who { display:flex; flex-direction:column; min-width:0; }
+  #winners .nm { font-size:20px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #winners .pz { font-size:15px; color: var(--mist); }
+  #winners li.ultimate .pz { color: var(--gold); }
+  .empty { color: var(--mist); font-size:18px; }
+
+  .overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(8,16,12,.72); z-index:20; transition:opacity .25s; }
+  .overlay.hidden { opacity:0; pointer-events:none; }
+  .card { text-align:center; background: var(--pine2); border:3px solid var(--gold); border-radius:28px; padding:36px 64px; min-width: 460px; max-width: 80vw; box-shadow:0 20px 60px rgba(0,0,0,.6); }
+  .card img, .card .ph { width:160px; height:160px; border-radius:50%; border:5px solid var(--gold); object-fit:cover; background:#3a5a49; margin:0 auto 16px; display:block; }
+  #ov-title { font-size:28px; color: var(--gold); font-weight:700; letter-spacing:3px; }
+  #ov-name { font-size: clamp(36px,4.4vw,64px); font-weight:800; margin:8px 0; word-break:break-all; }
+  #ov-sub { font-size:24px; color: var(--mist); min-height:32px; }
+  #ov-sub b { color:#fff; }
+  #confetti { position:fixed; inset:0; pointer-events:none; z-index:30; }
+  .gone { text-align:center; padding:80px 24px; font-size:28px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎄 圣诞厨房寻宝季 · 幸运转盘</h1>
+  <span id="badge" hidden>预演模式</span>
+</header>
+<main id="app">
+  <section class="stage">
+    <div class="wheelwrap">
+      <canvas id="wheel" width="1000" height="1000"></canvas>
+      <div class="pointer"></div>
+    </div>
+    <div id="ticker">&nbsp;</div>
+    <button id="spin" disabled>🎡 转！</button>
+    <p id="hint"></p>
+  </section>
+  <aside class="side">
+    <h2>得奖名单<small id="count"></small></h2>
+    <ol id="winners"></ol>
+  </aside>
+</main>
+
+<div id="overlay" class="overlay hidden">
+  <div class="card">
+    <div id="ov-avatar-wrap"></div>
+    <div id="ov-title"></div>
+    <div id="ov-name"></div>
+    <div id="ov-sub"></div>
+  </div>
+</div>
+<canvas id="confetti"></canvas>
+
+<script>
+const token = new URLSearchParams(location.search).get('s') || '';
+const $ = (id) => document.getElementById(id);
+const canvas = $('wheel'), ctx = canvas.getContext('2d');
+const TAU = Math.PI * 2;
+const COLORS = ['#B5372A','#1F7A4D','#D9A62E','#2C6FA3','#7A4DA3','#D9702E','#18907C','#8F2D3C'];
+
+let state = null;
+let rot = 0;
+let spinning = false;
+let serverOffset = 0;
+let shownEventAt = 0;
+let overlayTimer = null;
+
+async function api(path, opts) {
+  const r = await fetch(path + '?s=' + encodeURIComponent(token), opts);
+  return r.json();
+}
+
+/* ---------- 转盘绘制 ---------- */
+function drawWheel(rotation) {
+  const W = canvas.width, cx = W / 2, cy = W / 2, R = W / 2 - 14;
+  ctx.clearRect(0, 0, W, W);
+  const list = state ? state.participants : [];
+  const total = list.reduce((s, p) => s + p.tickets, 0);
+
+  // 外圈
+  ctx.beginPath(); ctx.arc(cx, cy, R + 10, 0, TAU); ctx.fillStyle = '#E8B84A'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, R + 2, 0, TAU); ctx.fillStyle = '#14231C'; ctx.fill();
+
+  if (!total) {
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fillStyle = '#1F3429'; ctx.fill();
+    return;
+  }
+
+  let a = rotation;
+  list.forEach((p, i) => {
+    const ang = (p.tickets / total) * TAU;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a, a + ang); ctx.closePath();
+    ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.stroke();
+
+    // 扇形够宽才写名字
+    if (ang > 0.1) {
+      ctx.save();
+      ctx.translate(cx, cy); ctx.rotate(a + ang / 2);
+      const size = Math.max(14, Math.min(34, R * ang * 0.5));
+      ctx.font = `bold ${size}px 'Noto Sans SC','Microsoft YaHei',sans-serif`;
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      let t = p.name;
+      const maxW = R * 0.7;
+      while (t.length > 1 && ctx.measureText(t).width > maxW) t = t.slice(0, -1);
+      if (t !== p.name) t += '…';
+      ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 4;
+      ctx.fillText(t, R - 22, 0);
+      ctx.restore();
+    }
+    a += ang;
+  });
+
+  // 中心圆
+  ctx.beginPath(); ctx.arc(cx, cy, R * 0.13, 0, TAU); ctx.fillStyle = '#E8B84A'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, R * 0.1, 0, TAU); ctx.fillStyle = '#14231C'; ctx.fill();
+  ctx.font = `${R * 0.1}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff'; ctx.fillText('🎄', cx, cy + 2);
+}
+
+function nameUnderPointer(rotation) {
+  const list = state ? state.participants : [];
+  const total = list.reduce((s, p) => s + p.tickets, 0);
+  if (!total) return '';
+  const theta = (((-Math.PI / 2 - rotation) % TAU) + TAU) % TAU;
+  let acc = 0;
+  for (const p of list) {
+    acc += (p.tickets / total) * TAU;
+    if (theta < acc) return p.name;
+  }
+  return list[list.length - 1].name;
+}
+
+/* ---------- 转动 ---------- */
+function animateTo(endRot, ms) {
+  return new Promise((resolve) => {
+    const startRot = rot, t0 = performance.now();
+    const ease = (t) => 1 - Math.pow(1 - t, 4);
+    function frame(now) {
+      const t = Math.min(1, (now - t0) / ms);
+      rot = startRot + (endRot - startRot) * ease(t);
+      drawWheel(rot);
+      $('ticker').textContent = nameUnderPointer(rot);
+      if (t < 1) requestAnimationFrame(frame); else resolve();
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+async function doSpin() {
+  if (spinning || !state || state.status !== 'idle') return;
+  $('spin').disabled = true;
+  const list = state.participants.slice();       // 转盘当前的分块顺序
+  const total = list.reduce((s, p) => s + p.tickets, 0);
+  const r = await api('/api/spin', { method: 'POST' });
+  if (!r.ok) { $('hint').textContent = r.error || '转不了，稍后再试'; refresh(); return; }
+
+  spinning = true;
+  hideOverlay();
+  let start = 0, span = 0;
+  for (const p of list) {
+    const ang = (p.tickets / total) * TAU;
+    if (p.id === r.userId) { span = ang; break; }
+    start += ang;
+  }
+  const within = start + span * (0.15 + Math.random() * 0.7);
+  const targetMod = (((-Math.PI / 2 - within) % TAU) + TAU) % TAU;
+  const curMod = ((rot % TAU) + TAU) % TAU;
+  const delta = (((targetMod - curMod) % TAU) + TAU) % TAU;
+  const endRot = rot + TAU * 6 + delta;
+
+  await animateTo(endRot, Math.max(1500, r.animMs - 300));
+  rot = endRot % TAU;
+  spinning = false;
+  await refresh();
+}
+
+/* ---------- 状态刷新与界面 ---------- */
+async function refresh() {
+  let s;
+  try { s = await api('/api/state'); } catch (e) { return; }
+  if (!s.ok) {
+    document.body.innerHTML = '<div class="gone">🎄 这个转盘链接已经失效。<br>请回到 Discord，重新执行 /draw-christmas 获取新链接。</div>';
+    clearInterval(timer);
+    return;
+  }
+  serverOffset = s.serverTime - Date.now();
+  state = s;
+  render();
+}
+
+function avatarHtml(url, cls) {
+  return url ? `<img class="${cls || ''}" src="${url}" alt="">` : `<div class="ph ${cls || ''}"></div>`;
+}
+function esc(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function render() {
+  $('badge').hidden = state.mode !== 'test';
+  $('count').textContent = `${state.winners.length} / ${state.target}`;
+
+  const ol = $('winners');
+  ol.innerHTML = state.winners.length
+    ? state.winners.map((w) => {
+        const ult = w.prize === 'ULTIMATE';
+        return `<li class="${ult ? 'ultimate' : ''}"><span class="place">#${w.place}</span>${avatarHtml(w.avatarUrl)}<div class="who"><span class="nm">${esc(w.name)}</span><span class="pz">${ult ? '🌟 主厨豪华至尊大礼' : '🎁 圣诞神秘盲盒'}</span></div></li>`;
+      }).join('')
+    : '<li class="empty">还没有人，点「转」开始吧</li>';
+
+  const btn = $('spin');
+  const hint = $('hint');
+  if (state.status === 'idle') {
+    btn.disabled = spinning;
+    btn.textContent = `🎡 转！（抽第 ${state.winners.length + 1} 位）`;
+    hint.textContent = state.upgraded && state.winners.length < state.upgradeTop ? '🌟 这一位将获得「主厨豪华至尊大礼」！' : '';
+  } else if (state.status === 'done') {
+    btn.disabled = true; btn.textContent = '🎉 开奖完成';
+    hint.textContent = state.winners.length < state.target ? `有 ${state.target - state.winners.length} 个名额因无人在场而空缺` : '恭喜以上所有幸运伙伴！';
+  } else {
+    btn.disabled = true; btn.textContent = '🎡 转动中…';
+    hint.textContent = '';
+  }
+
+  if (!spinning) { drawWheel(rot); if (state.status !== 'idle') {} else $('ticker').innerHTML = '&nbsp;'; }
+
+  // 提示层：转盘停下后显示「抽到了谁」；之后显示结果
+  if (!spinning) {
+    if (state.status === 'waiting' && state.current) {
+      showPick();
+    } else if (state.lastEvent && state.lastEvent.at !== shownEventAt) {
+      shownEventAt = state.lastEvent.at;
+      showResult(state.lastEvent);
+    }
+  }
+}
+
+function showOverlay(avatarUrl, title, name, sub) {
+  $('ov-avatar-wrap').innerHTML = avatarHtml(avatarUrl);
+  $('ov-title').textContent = title;
+  $('ov-name').textContent = name;
+  $('ov-sub').innerHTML = sub;
+  $('overlay').classList.remove('hidden');
+}
+function hideOverlay() { clearTimeout(overlayTimer); $('overlay').classList.add('hidden'); }
+
+function showPick() {
+  const c = state.current;
+  clearTimeout(overlayTimer);
+  let sub;
+  if (state.mode === 'test') sub = '预演模式：不检查是否在场';
+  else {
+    const left = Math.max(0, Math.ceil((c.deadline - (Date.now() + serverOffset)) / 1000));
+    sub = `请在 <b>${left}</b> 秒内进入语音频道 <b>${esc(state.channelName || '直播频道')}</b>`;
+  }
+  showOverlay(c.avatarUrl, `第 ${c.place} 位 · 抽到了`, c.name, sub);
+}
+
+function showResult(ev) {
+  if (ev.type === 'win') {
+    const ult = ev.prize === 'ULTIMATE';
+    showOverlay(ev.avatarUrl, `🎉 第 ${ev.place} 位得奖`, ev.name, ult ? '🌟 主厨豪华至尊大礼' : '🎁 圣诞神秘盲盒');
+    burst();
+  } else {
+    showOverlay(ev.avatarUrl, '⏰ 没有在场', ev.name, '视为放弃，重新抽取');
+  }
+  overlayTimer = setTimeout(hideOverlay, 5500);
+}
+
+/* ---------- 彩带 ---------- */
+const cf = $('confetti'), cctx = cf.getContext('2d');
+let parts = [];
+function burst() {
+  cf.width = innerWidth; cf.height = innerHeight;
+  const colors = ['#E8B84A', '#C0392B', '#1F7A4D', '#F6F1E7', '#2C6FA3'];
+  for (let i = 0; i < 160; i++) {
+    parts.push({ x: innerWidth / 2, y: innerHeight / 2, vx: (Math.random() - 0.5) * 22, vy: -Math.random() * 20 - 4,
+      s: 6 + Math.random() * 8, c: colors[i % colors.length], r: Math.random() * TAU, vr: (Math.random() - 0.5) * 0.4, life: 120 + Math.random() * 60 });
+  }
+  if (parts.length === 160) requestAnimationFrame(tickConfetti);
+}
+function tickConfetti() {
+  cctx.clearRect(0, 0, cf.width, cf.height);
+  parts = parts.filter((p) => p.life-- > 0);
+  for (const p of parts) {
+    p.x += p.vx; p.y += p.vy; p.vy += 0.5; p.vx *= 0.99; p.r += p.vr;
+    cctx.save(); cctx.translate(p.x, p.y); cctx.rotate(p.r); cctx.fillStyle = p.c; cctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); cctx.restore();
+  }
+  if (parts.length) requestAnimationFrame(tickConfetti); else cctx.clearRect(0, 0, cf.width, cf.height);
+}
+
+$('spin').addEventListener('click', doSpin);
+const timer = setInterval(() => { if (!spinning) refresh(); }, 1000);
+refresh();
+</script>
+</body>
+</html>

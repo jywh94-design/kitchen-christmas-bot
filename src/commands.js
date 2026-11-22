@@ -1,19 +1,24 @@
-const crypto = require('crypto');
 const { EmbedBuilder, AttachmentBuilder, MessageFlags } = require('discord.js');
 const cfg = require('./config');
 const {
   pool,
   getUserTicketSummary,
-  getAllParticipantsSummary,
   getEventWindow,
 } = require('./db');
-const { nextTier, winnersFor, entryNeededForMaxWinners } = require('./rules');
+const { nextTier, entryNeededForMaxWinners } = require('./rules');
+const { createSession, buildResultEmbed } = require('./draw');
 const { buildReport } = require('./report');
 const { getRanking, rankOf, invalidateRankCache } = require('./ranking');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const hoursText = (sec) => (sec / 3600).toFixed(1);
+
+// 进度百分比（保留 1 位小数，最多 100%）
+function pctOf(value, max) {
+  const n = Math.min(100, Math.floor((value / max) * 1000) / 10);
+  return `${n}%`;
+}
 
 // 文字进度条：pct 是 0-100
 function progressBar(pct, len = 10) {
@@ -50,14 +55,10 @@ async function cmdMyTickets(interaction) {
   let progress = null;
   if (s.unlockedEntry) {
     const nd = nextTier(cfg.STREAK_DAY_TIERS, s.validDays);
-    const nv = nextTier(cfg.VOICE_HOUR_TIERS, s.voiceSeconds / 3600);
-    const nm = nextTier(cfg.TOTAL_MESSAGE_TIERS, s.validMessages);
     progress = [
       nd ? `• 有效打卡日：**${s.validDays}** 天，下一档 ${nd} 天` : `• 有效打卡日：**${s.validDays}** 天（已满档）`,
-      nv
-        ? `• 有效语音：**${hoursText(s.voiceSeconds)}** 小时，下一档 ${nv} 小时`
-        : `• 有效语音：**${hoursText(s.voiceSeconds)}** 小时（已满档）`,
-      nm ? `• 有效聊天：**${s.validMessages}** 条，下一档 ${nm} 条` : `• 有效聊天：**${s.validMessages}** 条（已满档）`,
+      `• 有效语音：**${pctOf(s.voiceSeconds, cfg.VOICE_HOUR_TIERS[cfg.VOICE_HOUR_TIERS.length - 1] * 3600)}**/100`,
+      `• 有效聊天：**${pctOf(s.validMessages, cfg.TOTAL_MESSAGE_TIERS[cfg.TOTAL_MESSAGE_TIERS.length - 1])}**/100`,
       `• 有效拉新：**${Math.min(s.verifiedInvites, cfg.MAX_INVITE_TICKETS)}/${cfg.MAX_INVITE_TICKETS}** 位`,
     ].join('\n');
   }
@@ -76,9 +77,10 @@ async function cmdMyTickets(interaction) {
     .setTitle('🎟️ 我的圣诞厨房幸运签筒')
     .setDescription(`你好 **${interaction.user.username}**，这是你目前的攒签状态：`)
     .addFields(
-      { name: '当前总幸运签', value: `**${s.totalTickets} 张**（上限 ${cfg.MAX_BASE_TICKETS}+${cfg.MAX_INVITE_TICKETS}）`, inline: true },
-      { name: '签数构成', value: `日常 **${s.baseTickets}/${cfg.MAX_BASE_TICKETS}** + 拉新 **${s.bonusInviteTickets}/${cfg.MAX_INVITE_TICKETS}**`, inline: true },
-      { name: '入场进度', value: entryText, inline: true }
+      { name: '当前总幸运签', value: `**${s.totalTickets}/${maxTotal}**`, inline: true },
+      { name: '日常签', value: `**${s.baseTickets}/${cfg.MAX_BASE_TICKETS}**`, inline: true },
+      { name: '拉新签', value: `**${s.bonusInviteTickets}/${cfg.MAX_INVITE_TICKETS}**`, inline: true },
+      { name: '入场进度', value: entryText }
     );
   if (progress) embed.addFields({ name: '下一档进度', value: progress });
   embed
@@ -142,7 +144,7 @@ async function cmdHelpEvent(interaction) {
         value: [
           `• 入场不满 ${first} 人抽 ${cfg.WINNERS_BASE} 位，满 ${first} 人抽 ${cfg.WINNERS_BASE + 1} 位，之后每多 ${cfg.WINNERS_STEP_USERS} 人加 1 位，满 ${entryNeededForMaxWinners()} 人抽满 ${cfg.CHRISTMAS_WINNERS_COUNT} 位`,
           `• 入场满 ${cfg.UPGRADE_ENTRY_THRESHOLD} 人：最先抽出的 ${cfg.UPGRADE_TOP_COUNT} 位升级为「主厨豪华至尊大礼」`,
-          `• **12月24日 20:00** 在直播语音频道开奖，被抽到后 ${cfg.DRAW_CLAIM_SECONDS} 秒内要在场，否则当场重抽`,
+          `• **12月24日 20:00** 用幸运转盘在直播语音频道开奖，被抽到后 ${cfg.DRAW_CLAIM_SECONDS} 秒内要在场，否则当场重抽`,
           '• 每人限中 1 份，签越多机会越大',
         ].join('\n'),
       },
@@ -160,70 +162,29 @@ async function cmdHelpEvent(interaction) {
 }
 
 // =====================================================================
-// /draw-christmas
+// /draw-christmas：创建一场幸运转盘开奖，把转盘网页链接私下发给管理员
 // =====================================================================
-const PRIZE_TEXT = {
-  ULTIMATE: '🌟 **【主厨豪华至尊大礼】**',
-  BLINDBOX: '🎁 **【圣诞神秘盲盒】**',
-};
-
-function buildResultEmbed(winners, extra = {}) {
-  const lines = winners.map((w, i) => `**第 ${i + 1} 位**：<@${w.userId}> ➔ ${PRIZE_TEXT[w.prize] || PRIZE_TEXT.BLINDBOX}`);
-  const embed = new EmbedBuilder()
-    .setColor(0xf1c40f)
-    .setTitle(extra.title || `🎉 2026 圣诞厨房寻宝季 · ${winners.length} 位得奖名单`)
-    .setDescription(lines.join('\n') || '（无）');
-  if (extra.stats) embed.addFields({ name: '📊 本期统计', value: extra.stats });
-  if (extra.footer) embed.setFooter({ text: extra.footer });
-  return embed;
-}
-
-// 按签数加权随机抽 1 人（用系统级安全随机数）
-function pickWeighted(candidates) {
-  const total = candidates.reduce((sum, c) => sum + c.tickets, 0);
-  let r = crypto.randomInt(total);
-  for (const c of candidates) {
-    if (r < c.tickets) return c;
-    r -= c.tickets;
-  }
-  return candidates[candidates.length - 1];
-}
-
-// 等待某人出现在指定语音频道里，最多等 seconds 秒
-async function waitForPresence(channel, userId, seconds) {
-  const deadline = Date.now() + seconds * 1000;
-  while (true) {
-    if (channel.members.has(userId)) return true;
-    if (Date.now() >= deadline) return false;
-    await sleep(1000);
-  }
+function publicBaseUrl() {
+  const raw =
+    process.env.PUBLIC_URL ||
+    (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '');
+  return raw.replace(/\/+$/, '');
 }
 
 async function cmdDraw(interaction) {
   const testMode = interaction.options.getBoolean('test') ?? false;
-  let channel = null;
+  let voiceChannel = null;
 
   if (!testMode) {
-    // 已经正式开过奖：直接显示当时的结果，不会重新抽
-    const saved = await pool.query(`SELECT user_id, prize FROM draw_results ORDER BY place`);
-    if (saved.rows.length > 0) {
-      const winners = saved.rows.map((r) => ({ userId: r.user_id, prize: r.prize }));
-      return interaction.reply({
-        content: '📋 **本次活动已经正式开过奖，以下是当时的结果（不会重新抽）：**',
-        embeds: [buildResultEmbed(winners)],
-      });
-    }
-
     if (Date.now() <= getEventWindow().end) {
       return interaction.reply({
         content: '⏳ 统计还没截止，12月23日 23:59 之后才能正式开奖。想先预演，请把 `test` 选项选 True。',
         flags: EPHEMERAL,
       });
     }
-
     const channelId = process.env.DRAW_VOICE_CHANNEL_ID;
-    if (channelId) channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
-    if (!channel || !channel.isVoiceBased()) {
+    if (channelId) voiceChannel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+    if (!voiceChannel || !voiceChannel.isVoiceBased()) {
       return interaction.reply({
         content: '❌ 没找到直播语音频道。请在 Railway 变量里设置 `DRAW_VOICE_CHANNEL_ID`（直播开奖的语音频道 ID）。',
         flags: EPHEMERAL,
@@ -231,82 +192,49 @@ async function cmdDraw(interaction) {
     }
   }
 
-  await interaction.deferReply();
-
-  const { participants, totalServerTickets, totalEntryUsers } = await getAllParticipantsSummary();
-  if (participants.length === 0) {
-    return interaction.editReply('❌ 当前签筒里还没有任何符合资格的参与者！');
+  const base = publicBaseUrl();
+  if (!base) {
+    return interaction.reply({
+      content:
+        '❌ 机器人还没有公网网址，转盘页面打不开。请在 Railway 里点机器人服务 → Settings → Networking → Generate Domain，生成后重新执行这个指令。',
+      flags: EPHEMERAL,
+    });
   }
 
-  const target = Math.min(winnersFor(totalEntryUsers), participants.length);
-  const upgraded = totalEntryUsers >= cfg.UPGRADE_ENTRY_THRESHOLD;
-  let candidates = participants.map((p) => ({ userId: p.userId, tickets: p.totalTickets }));
+  await interaction.deferReply({ flags: EPHEMERAL });
 
-  const modeTag = testMode ? '（🧪 预演模式）' : '';
-  await interaction.editReply(`🎄 **圣诞厨房签筒启动中……${modeTag}** 全服共 \`${totalServerTickets}\` 张幸运签，本次抽 **${target}** 位！🎲`);
-  await sleep(2000);
-  await interaction.editReply('🥁 **倒计时 3…… 炉火已旺！** ✨');
-  await sleep(1500);
-  await interaction.editReply(`🥁 **倒计时 2…… 正在锁定 ${target} 位幸运儿！** 🔥`);
-  await sleep(1500);
-  await interaction.editReply('🥁 **倒计时 1…… 开奖！** 🎊');
-  await sleep(1000);
-
-  const winners = [];
-  let absentCount = 0;
-
-  while (winners.length < target && candidates.length > 0) {
-    const picked = pickWeighted(candidates);
-    candidates = candidates.filter((c) => c.userId !== picked.userId);
-    const place = winners.length + 1;
-
-    // 正式开奖要检查是否在直播语音频道里
-    if (channel && !channel.members.has(picked.userId)) {
-      await interaction.followUp(
-        `🎲 第 ${place} 位抽到 <@${picked.userId}>！请在 **${cfg.DRAW_CLAIM_SECONDS} 秒**内进入 <#${channel.id}>！`
-      );
-      const here = await waitForPresence(channel, picked.userId, cfg.DRAW_CLAIM_SECONDS);
-      if (!here) {
-        absentCount += 1;
-        await interaction.followUp(`⏰ <@${picked.userId}> 没有在场，视为放弃，重新抽取！`);
-        continue;
-      }
+  let session;
+  try {
+    session = await createSession({ guild: interaction.guild, channel: interaction.channel, voiceChannel, testMode });
+  } catch (err) {
+    if (err.message === 'NO_PARTICIPANTS') {
+      return interaction.editReply('❌ 当前签筒里还没有任何符合资格的参与者！');
     }
-
-    const prize = upgraded && place <= cfg.UPGRADE_TOP_COUNT ? 'ULTIMATE' : 'BLINDBOX';
-    winners.push({ userId: picked.userId, prize, tickets: picked.tickets });
-    await interaction.followUp(`🎉 **第 ${place} 位**：<@${picked.userId}> ➔ ${PRIZE_TEXT[prize]}`);
-    await sleep(1500);
+    throw err;
   }
 
-  // 正式开奖：保存结果，之后不会被重复开奖覆盖
-  if (!testMode) {
-    for (let i = 0; i < winners.length; i++) {
-      const w = winners[i];
-      await pool.query(
-        `INSERT INTO draw_results (place, user_id, prize, tickets) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (place) DO NOTHING`,
-        [i + 1, w.userId, w.prize, w.tickets]
-      );
-    }
+  // 已经正式开完奖：直接把当时的结果发到频道，不重新抽
+  if (session.status === 'done') {
+    await interaction.channel.send({
+      content: '📋 **本次活动已经正式开完奖，以下是结果：**',
+      embeds: [buildResultEmbed(session.winners)],
+    });
+    return interaction.editReply('这次活动已经开完奖，结果已发到频道。');
   }
 
-  let stats =
-    `入场总人数：**${totalEntryUsers} 人**（${upgraded ? `已触发 ${cfg.UPGRADE_ENTRY_THRESHOLD} 人豪华升级` : '未触发豪华升级'}）\n` +
-    `签筒总签数：**${totalServerTickets} 张**\n` +
-    `本期名额：**${target} 位**`;
-  if (absentCount > 0) stats += `\n因不在场重抽：**${absentCount} 次**`;
-  if (winners.length < target) stats += `\n⚠️ 有 ${target - winners.length} 个名额因无人在场而空缺`;
-
-  return interaction.editReply({
-    content: testMode ? '🧪 **预演结束（结果没有保存）**' : '🎊 **叮咚！圣诞神秘礼物开奖结果正式出炉！**',
-    embeds: [
-      buildResultEmbed(winners, {
-        stats,
-        footer: testMode ? '这是预演结果，不作数' : '恭喜以上幸运伙伴！请等待主厨发放礼物~',
-      }),
-    ],
-  });
+  const link = `${base}/wheel?s=${session.token}`;
+  const resumed = session.winners.length > 0 ? `\n（检测到已经抽出 ${session.winners.length} 位，会接着往下抽）` : '';
+  await interaction.editReply(
+    `🎡 **幸运转盘已准备好${testMode ? '（🧪 预演模式）' : ''}**${resumed}\n` +
+      `本次抽 **${session.target}** 位，转盘上共 ${session.candidates.length} 人。\n\n` +
+      `👉 ${link}\n\n` +
+      '这个链接只有你能看到，**请不要转发**。用浏览器打开后，把这个页面共享到直播里，点「转」就开始。' +
+      (testMode ? '\n预演模式不检查是否在场，结果也不会保存。' : '\n被抽到的人需要在直播语音频道里，机器人会自动检查并在频道播报。')
+  );
+  await interaction.channel.send(
+    `🎡 **幸运转盘开奖开始！**${testMode ? '（预演）' : ''}本次抽 **${session.target}** 位` +
+      (voiceChannel ? `，大家请待在 <#${voiceChannel.id}>！` : '！')
+  );
 }
 
 // =====================================================================
@@ -372,10 +300,9 @@ async function cmdTestSimulate(interaction) {
 
   if (action === 'preview_report') {
     await interaction.deferReply({ flags: EPHEMERAL });
-    const { embed, files } = await buildReport(interaction.guild, '🕛 【厨房夜宵战报 · 样式预览】00:00 签筒盘点！');
+    const { content, files } = await buildReport(interaction.guild, '🕛 **【厨房夜宵战报 · 样式预览】00:00 签筒盘点！**');
     return interaction.editReply({
-      content: '🧪 *以下是每日 00:00 自动战报的预览：*',
-      embeds: [embed],
+      content: `🧪 *以下是每日 00:00 自动战报的预览：*\n${content}`,
       files,
     });
   }

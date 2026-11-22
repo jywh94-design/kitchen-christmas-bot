@@ -6,6 +6,7 @@ const { pool, initDB, isEventActive, addActivity, getMYParts } = require('./db')
 const { handleCommand } = require('./commands');
 const { buildReport } = require('./report');
 const { registerCommands } = require('./register');
+const { startWebServer } = require('./web');
 
 // 兜底：任何没接住的错误只记录日志，不让机器人崩溃退出
 process.on('unhandledRejection', (err) => console.error('未处理的异步错误:', err));
@@ -127,8 +128,8 @@ client.once(Events.ClientReady, async () => {
 
       try {
         const channel = await client.channels.fetch(reportChannelId);
-        const { embed, files } = await buildReport(guild, `🕛 【厨房夜宵战报】12月${day}日 00:00 签筒盘点！`);
-        await channel.send({ embeds: [embed], files });
+        const { content, files } = await buildReport(guild, `🕛 **【厨房夜宵战报】12月${day}日 00:00 签筒盘点！**`);
+        await channel.send({ content, files });
       } catch (err) {
         console.error('每日战报发送失败:', err.message);
       }
@@ -252,4 +253,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
+startWebServer(); // 幸运转盘开奖页面（Railway 会通过 PORT 变量告诉我们用哪个端口）
 client.login(process.env.DISCORD_TOKEN);

@@ -104,9 +104,14 @@ async function drawAvatar(ctx, avatarBuf, cx, cy, r, name) {
 async function renderRankImage(entries) {
   ensureFont();
   const tpl = await getTemplate();
-  const canvas = createCanvas(tpl.width, tpl.height);
+  // 用 2 倍尺寸输出：Discord 里放大查看时文字和头像更清晰
+  const SCALE = 2;
+  const canvas = createCanvas(tpl.width * SCALE, tpl.height * SCALE);
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(tpl, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(tpl, 0, 0, tpl.width * SCALE, tpl.height * SCALE);
+  ctx.scale(SCALE, SCALE); // 之后所有坐标仍然按原图尺寸写
 
   // 前三名
   for (let i = 0; i < PODIUM.length && i < entries.length; i++) {
