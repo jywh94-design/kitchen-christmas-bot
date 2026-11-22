@@ -108,21 +108,21 @@ async function addActivity(userId, { voiceSec = 0, msgCount = 0 }) {
 
   await pool.query(
     `INSERT INTO user_stats (user_id, voice_seconds, valid_messages)
-     VALUES ($1, $2, $3)
+     VALUES ($1, $2::int, $3::int)
      ON CONFLICT (user_id) DO UPDATE SET
-       voice_seconds = user_stats.voice_seconds + $2,
-       valid_messages = user_stats.valid_messages + $3,
+       voice_seconds = user_stats.voice_seconds + $2::int,
+       valid_messages = user_stats.valid_messages + $3::int,
        updated_at = NOW()`,
     [userId, voiceSec, msgCount]
   );
 
   const res = await pool.query(
     `INSERT INTO daily_activity (user_id, activity_date, voice_seconds, valid_messages, is_valid_day)
-     VALUES ($1, $2, $3, $4, ($3 >= $5 OR $4 >= $6))
+     VALUES ($1, $2::varchar, $3::int, $4::int, ($3::int >= $5::int OR $4::int >= $6::int))
      ON CONFLICT (user_id, activity_date) DO UPDATE SET
-       voice_seconds = daily_activity.voice_seconds + $3,
-       valid_messages = daily_activity.valid_messages + $4,
-       is_valid_day = ((daily_activity.voice_seconds + $3) >= $5 OR (daily_activity.valid_messages + $4) >= $6)
+       voice_seconds = daily_activity.voice_seconds + $3::int,
+       valid_messages = daily_activity.valid_messages + $4::int,
+       is_valid_day = ((daily_activity.voice_seconds + $3::int) >= $5::int OR (daily_activity.valid_messages + $4::int) >= $6::int)
      RETURNING is_valid_day`,
     [userId, dateStr, voiceSec, msgCount, reqVoiceSec, reqMsgCount]
   );
