@@ -1,6 +1,6 @@
 {
   "name": "kitchen-christmas-bot",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "description": "厨房机密处 2026 圣诞寻宝季：自动算签与直播开奖机器人",
   "main": "src/index.js",
   "scripts": {

@@ -9,7 +9,7 @@ const { nextTier, entryNeededForMaxWinners } = require('./rules');
 const { createSession, buildResultEmbed } = require('./draw');
 const { buildReport } = require('./report');
 const { renderTicketImage } = require('./ticketImage');
-const { getRanking, rankOf, invalidateRankCache } = require('./ranking');
+const { getRanking, rankOf, invalidateRankCache, fetchAvatar } = require('./ranking');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -81,8 +81,12 @@ async function cmdMyTickets(interaction) {
   // 优先发图片卡片；出图失败就退回文字卡片，保证一定有回复
   try {
     const nd = s.unlockedEntry ? nextTier(cfg.STREAK_DAY_TIERS, s.validDays) : null;
+    // 优先用他在服务器里设置的头像，没有就用个人头像
+    const who = interaction.member?.displayAvatarURL ? interaction.member : interaction.user;
+    const avatarUrl = who.displayAvatarURL({ extension: 'png', size: 256, forceStatic: true });
     const buf = await renderTicketImage({
       username: interaction.user.username,
+      avatar: await fetchAvatar(avatarUrl),
       total: s.totalTickets,
       maxTotal,
       base: s.baseTickets,

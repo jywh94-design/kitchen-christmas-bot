@@ -60,4 +60,4 @@ function rankOf(data, userId) {
   return i === -1 ? null : { rank: i + 1, tickets: data.sorted[i].totalTickets };
 }
 
-module.exports = { getRanking, rankOf, invalidateRankCache };
+module.exports = { getRanking, rankOf, invalidateRankCache, fetchAvatar };

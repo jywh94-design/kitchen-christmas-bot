@@ -21,6 +21,7 @@ const L = {
   bar: { sx: 681, sy: 307, innerLeft: 693, innerW: 402 }, // 进度条素材左上角、绿色区域起点和宽度
   pct: { cx: 1160, cy: 336, size: 30 },
   check: { x: 1213, y: 307 },
+  avatar: { x: 98, y: 150, size: 280 }, // 头像先画成方形，再用 avatar-mask.png 裁成圆框里的形状
   rowsY: [470, 506, 543, 580],
   rowsX: 668,
   rowsMaxW: 190,
@@ -44,7 +45,8 @@ function getAssets() {
       loadImage(path.join(DIR, 'tickets', 'template.png')),
       loadImage(path.join(DIR, 'tickets', 'bar-full.png')),
       loadImage(path.join(DIR, 'tickets', 'check.png')),
-    ]).then(([template, barFull, check]) => ({ template, barFull, check }));
+      loadImage(path.join(DIR, 'tickets', 'avatar-mask.png')),
+    ]).then(([template, barFull, check, mask]) => ({ template, barFull, check, mask }));
   }
   return assets;
 }
@@ -55,6 +57,12 @@ function clean(s) {
     .replace(/\*\*/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function hashColor(seed) {
+  let h = 0;
+  for (const ch of String(seed)) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  return `hsl(${h % 360}, 45%, 45%)`;
 }
 
 function setFont(ctx, size) {
@@ -99,17 +107,46 @@ function wrap(ctx, str, size, maxW, maxLines) {
 
 /**
  * v = {
- *   username, total, maxTotal, base, maxBase, invite, maxInvite,
+ *   username, avatar(Buffer|null), total, maxTotal, base, maxBase, invite, maxInvite,
  *   entryPct (0-100), rows: [string x4] | null, hint, footer
  * }
  */
 async function renderTicketImage(v) {
   ensureFont();
-  const { template, barFull, check } = await getAssets();
+  const { template, barFull, check, mask } = await getAssets();
   const canvas = createCanvas(template.width, template.height);
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(template, 0, 0);
+
+  // 0) 头像：盖住圆框里原来的吉祥物（缎带、星星和积雪由遮罩保留）
+  {
+    const tmp = createCanvas(template.width, template.height);
+    const t = tmp.getContext('2d');
+    let img = null;
+    if (v.avatar) {
+      try {
+        img = await loadImage(v.avatar);
+      } catch (e) {
+        img = null;
+      }
+    }
+    const A = L.avatar;
+    if (img) {
+      t.drawImage(img, A.x, A.y, A.size, A.size);
+    } else {
+      t.fillStyle = hashColor(v.username);
+      t.fillRect(A.x, A.y, A.size, A.size);
+      setFont(t, 130);
+      t.fillStyle = '#FFFFFF';
+      t.textAlign = 'center';
+      t.textBaseline = 'middle';
+      t.fillText(Array.from(clean(v.username) || '厨')[0], A.x + A.size / 2, A.y + A.size / 2);
+    }
+    t.globalCompositeOperation = 'destination-in';
+    t.drawImage(mask, 0, 0);
+    ctx.drawImage(tmp, 0, 0);
+  }
 
   // 1) 问候语（红色横幅）
   setFont(ctx, L.greeting.size);
