@@ -1,4 +1,4 @@
-module.exports = {
+const cfg = {
   // ================= 1. 每日有效打卡判定 =================
   DAILY_VOICE_MINUTES: 30,     // 每天有效开麦满多少分钟算打卡1天
   DAILY_MESSAGES: 25,          // 或者每天有效聊天满多少条算打卡1天
@@ -36,3 +36,28 @@ module.exports = {
   // 这个时间点之后，/test-simulate 的「清空」会被拒绝（除非 Railway 变量里设置 ALLOW_RESET=true）
   PROTECT_RESET_FROM_ISO: '2026-12-01T00:00:00+08:00',
 };
+
+// ================= 7. 快速测试模式（只用于实测）=================
+// 在 Railway 变量里加 TEST_FAST=true，门槛就会大幅放宽，几个人一小时内能测完整个流程。
+// 安全保护：到 12月1日 00:00 之后，这个开关会自动失效，不会误伤正式活动。
+const fastRequested = process.env.TEST_FAST === 'true';
+const fastAllowed = Date.now() < new Date(cfg.PROTECT_RESET_FROM_ISO).getTime();
+cfg.TEST_FAST = fastRequested && fastAllowed;
+
+if (cfg.TEST_FAST) {
+  Object.assign(cfg, {
+    DAILY_VOICE_MINUTES: 1,        // 开麦满 1 分钟算 1 个有效日
+    DAILY_MESSAGES: 3,             // 聊天满 3 条算 1 个有效日
+    MESSAGE_COOLDOWN_SEC: 15,      // 聊天冷却缩短到 15 秒
+    ENTRY_VALID_DAYS: 1,           // 1 个有效日就入场
+    INVITE_VERIFY_DAYS: 1,         // 朋友 1 个有效日就算有效拉新
+    VOICE_HOUR_TIERS: [0.02, 0.05],   // 约 1.2 分钟、3 分钟各 +1 签
+    TOTAL_MESSAGE_TIERS: [5, 10],     // 5 条、10 条各 +1 签
+    DRAW_CLAIM_SECONDS: 15,        // 被抽到后 15 秒内要在场
+  });
+  console.warn('⚠️ 快速测试模式已开启（TEST_FAST=true）：规则门槛已放宽，仅用于实测！');
+} else if (fastRequested && !fastAllowed) {
+  console.warn('⚠️ 已过 12月1日，TEST_FAST 开关自动失效，使用正式规则。请在 Railway 里删掉这个变量。');
+}
+
+module.exports = cfg;

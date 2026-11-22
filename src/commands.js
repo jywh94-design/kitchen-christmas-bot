@@ -85,7 +85,11 @@ async function cmdMyTickets(interaction) {
   if (progress) embed.addFields({ name: '下一档进度', value: progress });
   embed
     .addFields({ name: '小贴士', value: hint })
-    .setFooter({ text: '统计周期：12月1日 - 12月23日 | 闭麦挂机与水贴不计入统计' });
+    .setFooter({
+      text: cfg.TEST_FAST
+        ? '⚠️ 快速测试模式已开启，门槛已放宽，仅用于实测'
+        : '统计周期：12月1日 - 12月23日 | 闭麦挂机与水贴不计入统计',
+    });
 
   return interaction.reply({ embeds: [embed], flags: EPHEMERAL });
 }
@@ -305,6 +309,27 @@ async function cmdTestSimulate(interaction) {
       content: `🧪 *以下是每日 00:00 自动战报的预览：*\n${content}`,
       files,
     });
+  }
+
+  if (action === 'send_report') {
+    await interaction.deferReply({ flags: EPHEMERAL });
+    const channelId = process.env.REPORT_CHANNEL_ID;
+    if (!channelId) return interaction.editReply('❌ 还没设置 `REPORT_CHANNEL_ID`（战报频道 ID）。');
+    let target;
+    try {
+      target = await interaction.client.channels.fetch(channelId);
+    } catch (err) {
+      return interaction.editReply(`❌ 找不到战报频道，或机器人看不到它：${err.message}`);
+    }
+    const { content, files } = await buildReport(interaction.guild, '🕛 **【厨房夜宵战报 · 测试发送】**');
+    try {
+      await target.send({ content, files });
+    } catch (err) {
+      return interaction.editReply(
+        `❌ 发送失败：${err.message}\n请检查机器人在该频道有没有「查看频道」「发送消息」「附加文件」权限。`
+      );
+    }
+    return interaction.editReply(`✅ 已发送到 <#${channelId}>，去看看图片和文字显示对不对。`);
   }
 
   if (action === 'clear_draw') {
