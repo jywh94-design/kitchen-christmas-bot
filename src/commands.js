@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { EmbedBuilder, MessageFlags } = require('discord.js');
+const { EmbedBuilder, AttachmentBuilder, MessageFlags } = require('discord.js');
 const cfg = require('./config');
 const {
   pool,
@@ -8,16 +8,25 @@ const {
   getEventWindow,
 } = require('./db');
 const { nextTier, winnersFor, entryNeededForMaxWinners } = require('./rules');
-const { buildReportEmbed } = require('./report');
+const { buildReport } = require('./report');
+const { getRanking, rankOf, invalidateRankCache } = require('./ranking');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const hoursText = (sec) => (sec / 3600).toFixed(1);
 
+// 文字进度条：pct 是 0-100
+function progressBar(pct, len = 10) {
+  const filled = Math.round((pct / 100) * len);
+  return '█'.repeat(filled) + '░'.repeat(len - filled);
+}
+
 async function handleCommand(interaction) {
   switch (interaction.commandName) {
     case 'my-tickets':
       return cmdMyTickets(interaction);
+    case 'rank':
+      return cmdRank(interaction);
     case 'help-event':
       return cmdHelpEvent(interaction);
     case 'draw-christmas':
@@ -34,12 +43,12 @@ async function cmdMyTickets(interaction) {
   const s = await getUserTicketSummary(interaction.user.id);
   const maxTotal = cfg.MAX_BASE_TICKETS + cfg.MAX_INVITE_TICKETS;
 
-  let progress;
-  if (!s.unlockedEntry) {
-    progress =
-      `入场进度：有效打卡 **${s.validDays}/${cfg.ENTRY_VALID_DAYS}** 天\n` +
-      `（当天开麦满 ${cfg.DAILY_VOICE_MINUTES} 分钟，或有效聊天满 ${cfg.DAILY_MESSAGES} 条，算 1 天。解锁后得 1 签并自动获得身份组）`;
-  } else {
+  // 入场进度：0% - 100% 进度条
+  const entryPct = Math.min(100, Math.floor((s.validDays / cfg.ENTRY_VALID_DAYS) * 100));
+  const entryText = `${progressBar(entryPct)} **${entryPct}%**${entryPct >= 100 ? ' ✅' : ''}`;
+
+  let progress = null;
+  if (s.unlockedEntry) {
     const nd = nextTier(cfg.STREAK_DAY_TIERS, s.validDays);
     const nv = nextTier(cfg.VOICE_HOUR_TIERS, s.voiceSeconds / 3600);
     const nm = nextTier(cfg.TOTAL_MESSAGE_TIERS, s.validMessages);
@@ -69,13 +78,30 @@ async function cmdMyTickets(interaction) {
     .addFields(
       { name: '当前总幸运签', value: `**${s.totalTickets} 张**（上限 ${cfg.MAX_BASE_TICKETS}+${cfg.MAX_INVITE_TICKETS}）`, inline: true },
       { name: '签数构成', value: `日常 **${s.baseTickets}/${cfg.MAX_BASE_TICKETS}** + 拉新 **${s.bonusInviteTickets}/${cfg.MAX_INVITE_TICKETS}**`, inline: true },
-      { name: '入场资格', value: s.unlockedEntry ? '✅ 已解锁入场' : '⏳ 活跃累积中', inline: true },
-      { name: '下一档进度', value: progress },
-      { name: '小贴士', value: hint }
-    )
+      { name: '入场进度', value: entryText, inline: true }
+    );
+  if (progress) embed.addFields({ name: '下一档进度', value: progress });
+  embed
+    .addFields({ name: '小贴士', value: hint })
     .setFooter({ text: '统计周期：12月1日 - 12月23日 | 闭麦挂机与水贴不计入统计' });
 
   return interaction.reply({ embeds: [embed], flags: EPHEMERAL });
+}
+
+// =====================================================================
+// /rank：查看排行榜图片和自己的名次
+// =====================================================================
+async function cmdRank(interaction) {
+  await interaction.deferReply({ flags: EPHEMERAL });
+  const data = await getRanking(interaction.guild);
+  const me = rankOf(data, interaction.user.id);
+  const line = me
+    ? `你目前排第 **${me.rank}** 名，共 **${me.tickets}** 张签（全服 ${data.totalEntryUsers} 人入场）。`
+    : '你还没解锁入场，暂时不在排行榜上。';
+  return interaction.editReply({
+    content: `${line}\n排名只是热度展示，最终得奖仍按签数抽签决定。`,
+    files: [new AttachmentBuilder(data.image, { name: 'ranking.png' })],
+  });
 }
 
 // =====================================================================
@@ -119,6 +145,10 @@ async function cmdHelpEvent(interaction) {
           `• **12月24日 20:00** 在直播语音频道开奖，被抽到后 ${cfg.DRAW_CLAIM_SECONDS} 秒内要在场，否则当场重抽`,
           '• 每人限中 1 份，签越多机会越大',
         ].join('\n'),
+      },
+      {
+        name: '🏆 每日排行',
+        value: '每天 00:00 公布签数前 9 名；签数相同时，比有效打卡天数，再比语音时长。排行只是热度展示，得奖仍按签数抽签决定。输入 `/rank` 随时查看自己的名次。',
       },
       {
         name: '⚠️ 公平说明',
@@ -331,6 +361,7 @@ async function cmdTestSimulate(interaction) {
       }
     }
 
+    invalidateRankCache();
     return interaction.editReply(
       `✅ **测试数据注入成功！**\n` +
         `• 你的账号已获得满额 **${maxTotal} 张签**（日常 ${cfg.MAX_BASE_TICKETS} + 拉新 ${cfg.MAX_INVITE_TICKETS}）\n` +
@@ -340,11 +371,12 @@ async function cmdTestSimulate(interaction) {
   }
 
   if (action === 'preview_report') {
-    const embed = await buildReportEmbed('🕛 【厨房夜宵战报 · 样式预览】00:00 签筒盘点！');
-    return interaction.reply({
+    await interaction.deferReply({ flags: EPHEMERAL });
+    const { embed, files } = await buildReport(interaction.guild, '🕛 【厨房夜宵战报 · 样式预览】00:00 签筒盘点！');
+    return interaction.editReply({
       content: '🧪 *以下是每日 00:00 自动战报的预览：*',
       embeds: [embed],
-      flags: EPHEMERAL,
+      files,
     });
   }
 
@@ -378,6 +410,7 @@ async function cmdTestSimulate(interaction) {
     }
 
     await pool.query(`TRUNCATE TABLE user_stats, daily_activity, invite_records`);
+    invalidateRankCache();
     return interaction.reply({
       content: '🧹 **数据库已清空！** 所有测试数据都已抹除，12月1日 00:00 将从零开始正式统计。',
       flags: EPHEMERAL,

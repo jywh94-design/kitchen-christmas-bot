@@ -4,7 +4,7 @@ const cron = require('node-cron');
 const cfg = require('./config');
 const { pool, initDB, isEventActive, addActivity, getMYParts } = require('./db');
 const { handleCommand } = require('./commands');
-const { buildReportEmbed } = require('./report');
+const { buildReport } = require('./report');
 const { registerCommands } = require('./register');
 
 // 兜底：任何没接住的错误只记录日志，不让机器人崩溃退出
@@ -127,8 +127,8 @@ client.once(Events.ClientReady, async () => {
 
       try {
         const channel = await client.channels.fetch(reportChannelId);
-        const embed = await buildReportEmbed(`🕛 【厨房夜宵战报】12月${day}日 00:00 签筒盘点！`);
-        await channel.send({ embeds: [embed] });
+        const { embed, files } = await buildReport(guild, `🕛 【厨房夜宵战报】12月${day}日 00:00 签筒盘点！`);
+        await channel.send({ embeds: [embed], files });
       } catch (err) {
         console.error('每日战报发送失败:', err.message);
       }

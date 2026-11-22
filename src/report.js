@@ -1,11 +1,29 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const cfg = require('./config');
 const { getAllParticipantsSummary } = require('./db');
 const { winnersFor, nextWinnerStep } = require('./rules');
+const { getRanking } = require('./ranking');
 
-// 每日 00:00 战报卡片（真实播报和 /test-simulate 预览共用）
-async function buildReportEmbed(title) {
-  const { totalServerTickets, totalEntryUsers } = await getAllParticipantsSummary();
+// 每日 00:00 战报：文字卡片 + 排行榜图片（真实播报和 /test-simulate 预览共用）
+async function buildReport(guild, title) {
+  let totalServerTickets;
+  let totalEntryUsers;
+  const files = [];
+  let hasImage = false;
+
+  try {
+    const data = await getRanking(guild, { force: true });
+    totalServerTickets = data.totalServerTickets;
+    totalEntryUsers = data.totalEntryUsers;
+    files.push(new AttachmentBuilder(data.image, { name: 'ranking.png' }));
+    hasImage = true;
+  } catch (err) {
+    // 图片生成失败也要把文字战报发出去
+    console.error('排行榜图片生成失败:', err.message);
+    const t = await getAllParticipantsSummary();
+    totalServerTickets = t.totalServerTickets;
+    totalEntryUsers = t.totalEntryUsers;
+  }
 
   const winners = winnersFor(totalEntryUsers);
   const step = nextWinnerStep(totalEntryUsers);
@@ -19,7 +37,7 @@ async function buildReportEmbed(title) {
       ? `入场人数再差 **${diff} 人**到 ${cfg.UPGRADE_ENTRY_THRESHOLD} 人，最先抽出的 **${cfg.UPGRADE_TOP_COUNT} 份**将升级为「主厨豪华至尊大礼」！`
       : `已突破 ${cfg.UPGRADE_ENTRY_THRESHOLD} 人，最先抽出的 **${cfg.UPGRADE_TOP_COUNT} 份**升级为「主厨豪华至尊大礼」！`;
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(0xe67e22)
     .setTitle(title)
     .setDescription('厨房打烊盘点时间到，看看大家今天往签筒里放了多少签。')
@@ -29,7 +47,11 @@ async function buildReportEmbed(title) {
       { name: '🎁 得奖名额', value: winnerText },
       { name: '🔥 至尊大礼升级进度', value: upgradeText }
     )
-    .setFooter({ text: '输入 /my-tickets 查自己的签数 | 输入 /help-event 看规则' });
+    .setFooter({ text: '输入 /rank 查自己的名次 | /my-tickets 查签数 | /help-event 看规则' });
+
+  if (hasImage) embed.setImage('attachment://ranking.png');
+
+  return { embed, files };
 }
 
-module.exports = { buildReportEmbed };
+module.exports = { buildReport };

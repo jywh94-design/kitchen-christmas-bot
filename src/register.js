@@ -7,6 +7,10 @@ function buildCommands() {
       .setDescription('🎟️ 查看我当前的圣诞幸运签数量与活跃进度（仅自己可见）'),
 
     new SlashCommandBuilder()
+      .setName('rank')
+      .setDescription('🏆 查看今日排行榜和我的名次（仅自己可见）'),
+
+    new SlashCommandBuilder()
       .setName('help-event')
       .setDescription('📖 查看【圣诞厨房寻宝季】活动规则与攒签说明'),
 
