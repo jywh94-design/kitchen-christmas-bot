@@ -8,6 +8,7 @@ const {
 const { nextTier, entryNeededForMaxWinners } = require('./rules');
 const { createSession, buildResultEmbed } = require('./draw');
 const { buildReport } = require('./report');
+const { renderTicketImage } = require('./ticketImage');
 const { getRanking, rankOf, invalidateRankCache } = require('./ranking');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -45,6 +46,7 @@ async function handleCommand(interaction) {
 // /my-tickets
 // =====================================================================
 async function cmdMyTickets(interaction) {
+  await interaction.deferReply({ flags: EPHEMERAL });
   const s = await getUserTicketSummary(interaction.user.id);
   const maxTotal = cfg.MAX_BASE_TICKETS + cfg.MAX_INVITE_TICKETS;
 
@@ -72,6 +74,38 @@ async function cmdMyTickets(interaction) {
     hint = `日常签已满 ${cfg.MAX_BASE_TICKETS} 张。邀请朋友入伙并一起互动，还能额外再加最多 ${cfg.MAX_INVITE_TICKETS} 张。`;
   }
 
+  const footer = cfg.TEST_FAST
+    ? '快速测试模式已开启，门槛已放宽，仅用于实测'
+    : '统计 12月1日-12月23日 | 闭麦挂机与水贴不计入';
+
+  // 优先发图片卡片；出图失败就退回文字卡片，保证一定有回复
+  try {
+    const nd = s.unlockedEntry ? nextTier(cfg.STREAK_DAY_TIERS, s.validDays) : null;
+    const buf = await renderTicketImage({
+      username: interaction.user.username,
+      total: s.totalTickets,
+      maxTotal,
+      base: s.baseTickets,
+      maxBase: cfg.MAX_BASE_TICKETS,
+      invite: s.bonusInviteTickets,
+      maxInvite: cfg.MAX_INVITE_TICKETS,
+      entryPct,
+      rows: s.unlockedEntry
+        ? [
+            nd ? `${s.validDays}/${nd} 天` : `${s.validDays} 天（满档）`,
+            `${pctOf(s.voiceSeconds, cfg.VOICE_HOUR_TIERS[cfg.VOICE_HOUR_TIERS.length - 1] * 3600)}/100`,
+            `${pctOf(s.validMessages, cfg.TOTAL_MESSAGE_TIERS[cfg.TOTAL_MESSAGE_TIERS.length - 1])}/100`,
+            `${Math.min(s.verifiedInvites, cfg.MAX_INVITE_TICKETS)}/${cfg.MAX_INVITE_TICKETS} 位`,
+          ]
+        : null,
+      hint,
+      footer,
+    });
+    return await interaction.editReply({ files: [new AttachmentBuilder(buf, { name: 'my-tickets.png' })] });
+  } catch (err) {
+    console.error('签筒图片生成失败，改发文字卡片:', err.message);
+  }
+
   const embed = new EmbedBuilder()
     .setColor(0xe74c3c)
     .setTitle('🎟️ 我的圣诞厨房幸运签筒')
@@ -91,7 +125,7 @@ async function cmdMyTickets(interaction) {
         : '统计周期：12月1日 - 12月23日 | 闭麦挂机与水贴不计入统计',
     });
 
-  return interaction.reply({ embeds: [embed], flags: EPHEMERAL });
+  return interaction.editReply({ embeds: [embed] });
 }
 
 // =====================================================================
