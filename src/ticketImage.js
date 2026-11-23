@@ -1,4 +1,4 @@
-// 把「我的幸运签筒」画成一张圣诞风图片（坐标对应 assets/tickets/template.png，1346×758）
+// 把「我的幸运签筒」画成一张圣诞风图片（坐标对应 assets/tickets/template.png，1596×986）
 const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 
@@ -8,26 +8,32 @@ const FAMILY = 'KitchenSans';
 const INK = '#4A1D12';       // 深棕
 const RED = '#B3261E';       // 圣诞红
 const CREAM = '#FFF1D6';     // 红色横幅上的字
+const GOLD = '#FFE27A';      // 问候语里的名字
 const MUTED = 'rgba(74,29,18,0.45)';
 
 // ---- 版面坐标 ----
 const L = {
-  greeting: { x: 566, y: 136, size: 24, maxW: 545 },
+  avatar: { x: 112, y: 226, size: 346 }, // 头像先画成方形，再用 avatar-mask.png 裁成青色区域的形状
+  greeting: { x: 645, y: 198, size: 33, maxW: 670, nameMaxW: 300 },
   cards: [
-    { cx: 642, cy: 252, size: 46, color: RED }, // 当前总幸运签
-    { cx: 900, cy: 252, size: 40, color: INK }, // 日常签
-    { cx: 1150, cy: 252, size: 40, color: INK }, // 拉新签
+    { cx: 715, cy: 322, size: 52, color: RED }, // 当前总幸运签
+    { cx: 1045, cy: 322, size: 46, color: INK }, // 日常签
+    { cx: 1345, cy: 322, size: 46, color: INK }, // 拉新签
   ],
-  bar: { sx: 681, sy: 307, innerLeft: 693, innerW: 402 }, // 进度条素材左上角、绿色区域起点和宽度
-  pct: { cx: 1160, cy: 336, size: 30 },
-  check: { x: 1213, y: 307 },
-  avatar: { x: 98, y: 150, size: 280 }, // 头像先画成方形，再用 avatar-mask.png 裁成圆框里的形状
-  rowsY: [470, 506, 543, 580],
-  rowsX: 668,
-  rowsMaxW: 190,
-  tip: { x: 925, y: 487, lineH: 32, size: 22, maxW: 250, maxLines: 4 },
-  footer: { cx: 840, cy: 655, size: 25, maxW: 560 },
+  bar: { sx: 788, sy: 386, innerLeft: 801, innerW: 468 }, // 进度条素材左上角、绿色区域起点和宽度
+  pct: { cx: 1345, cy: 409, size: 36 },
+  check: { x: 1409, y: 378 },
+  rowsY: [540, 580, 620, 660],
+  rowsX: 775,
+  rowsSize: 27,
+  rowsMaxW: 200,
+  pillLeft: 765,
+  pillHalfH: 17,
+  tip: { x: 1052, y: 563, lineH: 40, size: 28, maxW: 335, maxLines: 3 },
+  footer: { cx: 995, cy: 745, size: 28, maxW: 690 },
 };
+const PILL_DAYS = { fill: 'rgb(252,205,195)', text: 'rgb(150,40,35)' };
+const PILL_OTHER = { fill: 'rgb(190,232,150)', text: INK };
 
 let fontReady = false;
 function ensureFont() {
@@ -76,12 +82,15 @@ function fit(ctx, text, maxW) {
   return chars.join('') + '…';
 }
 
+// 画文字，返回实际画出来的宽度
 function text(ctx, str, x, y, size, fill, align = 'left', maxW = 0) {
   setFont(ctx, size);
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.fillStyle = fill;
-  ctx.fillText(maxW ? fit(ctx, str, maxW) : str, x, y);
+  const shown = maxW ? fit(ctx, str, maxW) : str;
+  ctx.fillText(shown, x, y);
+  return ctx.measureText(shown).width;
 }
 
 // 按宽度自动换行（中文一个字一个字量）
@@ -105,6 +114,19 @@ function wrap(ctx, str, size, maxW, maxLines) {
   return lines;
 }
 
+function pill(ctx, x, y, w, h, fill) {
+  const r = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arc(x + w - r, y + r, r, -Math.PI / 2, Math.PI / 2);
+  ctx.lineTo(x + r, y + h);
+  ctx.arc(x + r, y + r, r, Math.PI / 2, (Math.PI * 3) / 2);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
 /**
  * v = {
  *   username, avatar(Buffer|null), total, maxTotal, base, maxBase, invite, maxInvite,
@@ -119,10 +141,11 @@ async function renderTicketImage(v) {
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(template, 0, 0);
 
-  // 0) 头像：盖住圆框里原来的吉祥物（缎带、星星和积雪由遮罩保留）
+  // 0) 头像：贴进左边的圆框（形状由 avatar-mask.png 决定，缎带和星星保留在前面）
   {
     const tmp = createCanvas(template.width, template.height);
     const t = tmp.getContext('2d');
+    t.imageSmoothingEnabled = true;
     let img = null;
     if (v.avatar) {
       try {
@@ -137,7 +160,7 @@ async function renderTicketImage(v) {
     } else {
       t.fillStyle = hashColor(v.username);
       t.fillRect(A.x, A.y, A.size, A.size);
-      setFont(t, 130);
+      setFont(t, 150);
       t.fillStyle = '#FFFFFF';
       t.textAlign = 'center';
       t.textBaseline = 'middle';
@@ -148,13 +171,19 @@ async function renderTicketImage(v) {
     ctx.drawImage(tmp, 0, 0);
   }
 
-  // 1) 问候语（红色横幅）
-  setFont(ctx, L.greeting.size);
-  const prefix = '你好 ';
-  const suffix = '，这是你目前的攒签状态：';
-  const room = L.greeting.maxW - ctx.measureText(prefix + suffix).width;
-  const name = fit(ctx, clean(v.username) || '厨房伙伴', Math.max(80, room));
-  text(ctx, `${prefix}${name}${suffix}`, L.greeting.x, L.greeting.y, L.greeting.size, CREAM, 'left', L.greeting.maxW);
+  // 1) 问候语（红色横幅）：名字用金黄色突出
+  {
+    const g = L.greeting;
+    setFont(ctx, g.size);
+    const prefix = '你好 ';
+    const suffix = '，这是你目前的攒签状态：';
+    const room = g.maxW - ctx.measureText(prefix + suffix).width;
+    const name = fit(ctx, clean(v.username) || '厨房伙伴', Math.max(80, Math.min(g.nameMaxW, room)));
+    let x = g.x;
+    x += text(ctx, prefix, x, g.y, g.size, CREAM);
+    x += text(ctx, name, x, g.y, g.size, GOLD);
+    text(ctx, suffix, x, g.y, g.size, CREAM);
+  }
 
   // 2) 三张数字卡片
   const nums = [`${v.total}/${v.maxTotal}`, `${v.base}/${v.maxBase}`, `${v.invite}/${v.maxInvite}`];
@@ -163,7 +192,7 @@ async function renderTicketImage(v) {
     text(ctx, s, c.cx, c.cy, c.size, c.color, 'center');
   });
 
-  // 3) 入场进度条：先画好的「空槽」在模板里，这里把绿色填充按比例盖上去
+  // 3) 入场进度条：「空槽」在模板里，这里把绿色填充按比例盖上去
   const pct = Math.max(0, Math.min(100, Math.round(v.entryPct)));
   if (pct > 0) {
     ctx.save();
@@ -177,16 +206,24 @@ async function renderTicketImage(v) {
   text(ctx, `${pct}%`, L.pct.cx, L.pct.cy, L.pct.size, INK, 'center');
   if (pct >= 100) ctx.drawImage(check, L.check.x, L.check.y);
 
-  // 4) 下一档进度（四行）
+  // 4) 下一档进度（四行，带彩色底）
   for (let i = 0; i < 4; i++) {
     const y = L.rowsY[i];
-    if (v.rows) text(ctx, v.rows[i], L.rowsX, y, 24, INK, 'left', L.rowsMaxW);
-    else text(ctx, '入场后解锁', L.rowsX, y, 22, MUTED, 'left', L.rowsMaxW);
+    if (v.rows) {
+      const style = i === 0 ? PILL_DAYS : PILL_OTHER;
+      setFont(ctx, L.rowsSize);
+      const shown = fit(ctx, v.rows[i], L.rowsMaxW);
+      const w = ctx.measureText(shown).width;
+      pill(ctx, L.pillLeft, y - L.pillHalfH, L.rowsX - L.pillLeft + w + 18, L.pillHalfH * 2, style.fill);
+      text(ctx, shown, L.rowsX, y, L.rowsSize, style.text);
+    } else {
+      text(ctx, '入场后解锁', L.rowsX - 5, y, 25, MUTED, 'left', L.rowsMaxW);
+    }
   }
 
   // 5) 小贴士
   const lines = wrap(ctx, clean(v.hint), L.tip.size, L.tip.maxW, L.tip.maxLines);
-  lines.forEach((ln, i) => text(ctx, ln, L.tip.x, L.tip.y + i * L.tip.lineH, L.tip.size, INK, 'left'));
+  lines.forEach((ln, i) => text(ctx, ln, L.tip.x, L.tip.y + i * L.tip.lineH, L.tip.size, INK));
 
   // 6) 底部提示条
   text(ctx, clean(v.footer), L.footer.cx, L.footer.cy, L.footer.size, CREAM, 'center', L.footer.maxW);

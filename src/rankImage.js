@@ -5,15 +5,16 @@ const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const ASSETS = path.join(__dirname, '..', 'assets');
 const FAMILY = 'KitchenSans';
 
-// ---- 版面坐标（对应 assets/rank-template.png，1672×941）----
-// 前三名领奖台：头像圆心/半径 + 名字栏里名字与签数的位置
+// ---- 版面坐标（对应 assets/rank/template.png，1672×941）----
+// 头像位置和形状来自 assets/rank/slots.json（9 个圆）和 assets/rank/mask.png（把头像裁进圆圈）
+// 前三名名字栏里名字与签数的位置：
 const PODIUM = [
-  { cx: 479, cy: 413, r: 70, plateX: 479, nameY: 570, nameSize: 28, maxW: 190, ticketY: 601 }, // 第 1 名
-  { cx: 179, cy: 418, r: 66, plateX: 182, nameY: 570, nameSize: 26, maxW: 150, ticketY: 600 }, // 第 2 名
-  { cx: 768, cy: 419, r: 65, plateX: 770, nameY: 570, nameSize: 26, maxW: 150, ticketY: 600 }, // 第 3 名
+  { plateX: 479, nameY: 570, nameSize: 28, maxW: 190, ticketY: 601 }, // 第 1 名
+  { plateX: 182, nameY: 570, nameSize: 26, maxW: 150, ticketY: 600 }, // 第 2 名
+  { plateX: 770, nameY: 570, nameSize: 26, maxW: 150, ticketY: 600 }, // 第 3 名
 ];
 // 第 4-9 名：6 行
-const ROW = { firstCy: 182.5, step: 89.4, avatarX: 1081, avatarR: 30, nameX: 1135, nameMaxW: 185, ticketRightX: 1395, size: 31 };
+const ROW = { nameX: 1135, nameMaxW: 185, ticketRightX: 1395, size: 31 };
 
 const INK = '#4A1D12';      // 名字：深棕
 const RED = '#B3261E';      // 签数：圣诞红
@@ -26,10 +27,17 @@ function ensureFont() {
   fontReady = true;
 }
 
-let templatePromise = null;
-function getTemplate() {
-  if (!templatePromise) templatePromise = loadImage(path.join(ASSETS, 'rank-template.png'));
-  return templatePromise;
+const SLOTS = require(path.join(ASSETS, 'rank', 'slots.json')); // [第1,第2,第3,第4..第9名]
+
+let assetsPromise = null;
+function getAssets() {
+  if (!assetsPromise) {
+    assetsPromise = Promise.all([
+      loadImage(path.join(ASSETS, 'rank', 'template.png')),
+      loadImage(path.join(ASSETS, 'rank', 'mask.png')),
+    ]).then(([template, mask]) => ({ template, mask }));
+  }
+  return assetsPromise;
 }
 
 // 去掉表情符号等字体里没有的字符，避免出现方块
@@ -63,7 +71,8 @@ function hashColor(seed) {
   return `hsl(${h % 360}, 45%, 45%)`;
 }
 
-async function drawAvatar(ctx, avatarBuf, cx, cy, r, name) {
+// 把头像画成方形铺满这个位置（之后统一用 mask.png 裁成圆形）
+async function drawAvatarSquare(ctx, avatarBuf, slot, name) {
   let img = null;
   if (avatarBuf) {
     try {
@@ -72,64 +81,67 @@ async function drawAvatar(ctx, avatarBuf, cx, cy, r, name) {
       img = null;
     }
   }
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.closePath();
-  ctx.clip();
+  const x = slot.cx - slot.R;
+  const y = slot.cy - slot.R;
+  const size = slot.R * 2;
   if (img) {
-    ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+    ctx.drawImage(img, x, y, size, size);
   } else {
     ctx.fillStyle = hashColor(name);
-    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.fillRect(x, y, size, size);
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold ${Math.round(r * 1.1)}px ${FAMILY}`;
+    ctx.font = `bold ${Math.round(slot.R * 1.1)}px ${FAMILY}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(Array.from(name)[0] || '?', cx, cy);
+    ctx.fillText(Array.from(name)[0] || '?', slot.cx, slot.cy);
   }
-  ctx.restore();
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = '#8B2A1D';
-  ctx.stroke();
 }
 
 // entries: [{ name, tickets, avatar(Buffer|null) }]，已按名次排好，最多用前 9 个
 async function renderRankImage(entries) {
   ensureFont();
-  const tpl = await getTemplate();
-  const SCALE = 1; // 新模板本身已是 1672×941，不用再放大
-  const canvas = createCanvas(tpl.width * SCALE, tpl.height * SCALE);
+  const { template, mask } = await getAssets();
+  const canvas = createCanvas(template.width, template.height);
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(tpl, 0, 0, tpl.width * SCALE, tpl.height * SCALE);
-  ctx.scale(SCALE, SCALE); // 之后所有坐标仍然按原图尺寸写
+  ctx.drawImage(template, 0, 0);
 
-  // 前三名
+  // 1) 头像：先全部画到一张透明图层上，再用 mask.png 一次裁成 9 个圆（缎带和星星不会被盖住）
+  const layer = createCanvas(template.width, template.height);
+  const lctx = layer.getContext('2d');
+  lctx.imageSmoothingEnabled = true;
+  lctx.imageSmoothingQuality = 'high';
+  for (let i = 0; i < 9 && i < entries.length; i++) {
+    await drawAvatarSquare(lctx, entries[i].avatar, SLOTS[i], cleanName(entries[i].name));
+  }
+  // 人数不足 9 位时，空位用奶油色盖住模板里的绿色，不会露出绿圈
+  for (let i = entries.length; i < 9; i++) {
+    const sl = SLOTS[i];
+    lctx.fillStyle = '#F3E1BE';
+    lctx.fillRect(sl.cx - sl.R, sl.cy - sl.R, sl.R * 2, sl.R * 2);
+  }
+  lctx.globalCompositeOperation = 'destination-in';
+  lctx.drawImage(mask, 0, 0);
+  ctx.drawImage(layer, 0, 0);
+
+  // 2) 前三名：名字和签数
   for (let i = 0; i < PODIUM.length && i < entries.length; i++) {
     const p = PODIUM[i];
     const e = entries[i];
-    const name = cleanName(e.name);
-    await drawAvatar(ctx, e.avatar, p.cx, p.cy, p.r, name);
-    drawText(ctx, name, p.plateX, p.nameY, p.nameSize, INK, 'center', p.maxW);
+    drawText(ctx, cleanName(e.name), p.plateX, p.nameY, p.nameSize, INK, 'center', p.maxW);
     drawText(ctx, `${e.tickets} 签`, p.plateX, p.ticketY, 22, RED, 'center');
   }
 
-  // 第 4-9 名
+  // 3) 第 4-9 名
   for (let i = 0; i < 6; i++) {
-    const cy = ROW.firstCy + ROW.step * i;
+    const cy = SLOTS[i + 3].cy;
     const e = entries[i + 3];
     if (!e) {
       drawText(ctx, '虚位以待', ROW.nameX, cy, 28, MUTED, 'left');
       continue;
     }
-    const name = cleanName(e.name);
-    await drawAvatar(ctx, e.avatar, ROW.avatarX, cy, ROW.avatarR, name);
-    drawText(ctx, name, ROW.nameX, cy, ROW.size, INK, 'left', ROW.nameMaxW);
+    drawText(ctx, cleanName(e.name), ROW.nameX, cy, ROW.size, INK, 'left', ROW.nameMaxW);
     drawText(ctx, `${e.tickets} 签`, ROW.ticketRightX, cy, ROW.size, RED, 'right');
   }
 
