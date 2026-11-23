@@ -44,15 +44,30 @@
 
   .overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(40,12,8,.62); z-index:20; transition:opacity .25s; }
   .overlay.hidden { opacity:0; pointer-events:none; }
-  .card { text-align:center; background:var(--cream); border:6px solid var(--red); box-shadow:0 0 0 4px var(--gold), 0 20px 60px rgba(0,0,0,.6);
-    border-radius:28px; padding:34px 64px; min-width:460px; max-width:80vw; }
-  .card img, .card .ph { width:160px; height:160px; border-radius:50%; border:5px solid var(--gold); object-fit:cover; background:#c9a97f; margin:0 auto 14px; display:block; }
-  #ov-title { font-size:28px; color:var(--red); font-weight:800; letter-spacing:3px; }
-  #ov-name { font-size:clamp(36px,4.4vw,64px); font-weight:800; margin:8px 0; word-break:break-all; }
-  #ov-sub { font-size:24px; min-height:32px; }
-  #ov-sub b { color:var(--red); }
+  .card { position:relative; height:min(92vh, 1000px); aspect-ratio:1105/1423; container-type:size; filter:drop-shadow(0 18px 40px rgba(0,0,0,.55)); }
+  .card .frame { position:absolute; inset:0; width:100%; height:100%; z-index:2; }
+  .card .avwrap { position:absolute; left:49.7%; top:38.5%; width:27.4%; aspect-ratio:1; transform:translate(-50%,-50%); border-radius:50%; overflow:hidden;
+    background:#D5AC80; z-index:1; display:flex; align-items:center; justify-content:center; font-size:14cqw; font-weight:800; color:#fff; }
+  #ov-avin { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  .card .avwrap img { width:100%; height:100%; object-fit:cover; display:block; }
+  .card .tx { position:absolute; left:50%; transform:translate(-50%,-50%); z-index:3; text-align:center; font-weight:800; white-space:nowrap; }
+  #ov-title { top:52.4%; font-size:5.4cqw; color:var(--red); letter-spacing:.4cqw; }
+  #ov-name { top:60.6%; font-size:8.4cqw; max-width:80%; overflow:hidden; text-overflow:ellipsis; color:var(--ink); }
+  #ov-plate { top:72.1%; font-size:4.4cqw; max-width:64%; overflow:hidden; text-overflow:ellipsis; color:var(--ink); }
+  #ov-plate b { color:var(--red); }
+  #ov-bar { top:83.2%; font-size:4.8cqw; color:#fff; text-shadow:0 .3cqw 0 #7e1a12; max-width:62%; overflow:hidden; text-overflow:ellipsis; }
   #confetti { position:fixed; inset:0; pointer-events:none; z-index:30; }
   .gone { text-align:center; padding:80px 24px; font-size:28px; color:#fff; }
+
+  /* 主厨控制按钮 */
+  #ctrl { left:34px; top:214px; display:flex; flex-direction:column; gap:10px; z-index:5; }
+  #ctrl button, #order button { font:800 20px 'Noto Sans SC','Microsoft YaHei',sans-serif; color:var(--ink); background:#FFF1D6; border:3px solid #EBAA28;
+    border-radius:999px; padding:6px 16px; cursor:pointer; box-shadow:0 3px 0 #784609; text-align:left; }
+  #ctrl button.on { background:#FFE39A; border-color:#C0392B; }
+  #order { left:34px; top:420px; width:290px; z-index:5; background:rgba(255,241,214,.96); border:4px solid #B3261E; border-radius:18px; padding:14px; box-shadow:0 0 0 3px #EBAA28; text-align:center; }
+  #order h3 { margin:0 0 6px; font-size:22px; }
+  #order p { margin:4px 0 10px; font-size:18px; font-weight:700; }
+  #order button { display:block; width:100%; margin-top:8px; text-align:center; }
 </style>
 </head>
 <body>
@@ -67,14 +82,27 @@
   <button id="spin" disabled>开始转动</button>
   <div id="hint" class="t"></div>
   <div id="rows"></div>
+  <div id="ctrl">
+    <button id="b-sound"></button>
+    <button id="b-prize"></button>
+    <button id="b-auto"></button>
+  </div>
+  <div id="order" hidden>
+    <h3>前 3 名抽奖顺序</h3>
+    <p id="order-info"></p>
+    <button id="o-desc">先抽第 3 名，最后揭晓冠军</button>
+    <button id="o-asc">先抽第 1 名</button>
+  </div>
 </div>
 
 <div id="overlay" class="overlay hidden">
   <div class="card">
-    <div id="ov-avatar-wrap"></div>
-    <div id="ov-title"></div>
-    <div id="ov-name"></div>
-    <div id="ov-sub"></div>
+    <div class="avwrap"><div id="ov-avin"></div></div>
+    <img class="frame" src="/wheel-assets/popup.png" alt="">
+    <div id="ov-title" class="tx"></div>
+    <div id="ov-name" class="tx"></div>
+    <div id="ov-plate" class="tx"></div>
+    <div id="ov-bar" class="tx"></div>
   </div>
 </div>
 <canvas id="confetti"></canvas>
@@ -83,7 +111,6 @@
 const token = new URLSearchParams(location.search).get('s') || '';
 const $ = (id) => document.getElementById(id);
 const canvas = $('wheel'), ctx = canvas.getContext('2d');
-const CX = 620, CY = 426;
 const TAU = Math.PI * 2;
 const COLORS = ['#00966E','#C81E28','#F08214','#FAC814','#8232A0','#1E64C8','#5AAA28','#821432'];
 
@@ -93,9 +120,52 @@ let spinning = false;
 let serverOffset = 0;
 let shownEventAt = 0;
 let overlayTimer = null;
+let busyUntil = 0;                 // 弹窗/音效占用到什么时候（自动抽要等它结束）
+const hiddenPlaces = new Set();    // 还在「揭晓」的名次：名单先不显示
+let autoFails = 0;
 
-async function api(path, opts) {
-  const r = await fetch(path + '?s=' + encodeURIComponent(token), opts);
+/* ---------- 本地小设置（读写失败也不影响使用） ---------- */
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v === '1'; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v ? '1' : '0'); } catch (e) {} }
+let soundOn = lsGet('wheel.sound', true);
+let showPrize = lsGet('wheel.prize', false);   // 默认不显示「豪华大礼」
+let autoOn = false;                            // 自动抽剩下名额（每次打开页面都是关）
+
+/* ---------- 音效 ---------- */
+const sfx = {};
+function load(name, file) { const a = new Audio('/wheel-assets/' + file); a.preload = 'auto'; sfx[name] = a; return a; }
+load('spin', 'sfx-spin.mp3').loop = true;
+load('win1', 'sfx-win1.mp3'); load('win2', 'sfx-win2.mp3'); load('win3', 'sfx-win3.mp3');
+load('r1', 'sfx-rand1.mp3'); load('r2', 'sfx-rand2.mp3'); load('r3', 'sfx-rand3.mp3');
+const FALLBACK_LEN = { win1: 10.1, win2: 7.5, win3: 8.6, r1: 1.0, r2: 2.4, r3: 4.3 };
+let lastRand = '';
+function sfxFor(place) {
+  if (place === 1) return 'win1';
+  if (place === 2) return 'win2';
+  if (place === 3) return 'win3';
+  const pool = ['r1', 'r2', 'r3'].filter((n) => n !== lastRand);
+  lastRand = pool[Math.floor(Math.random() * pool.length)];
+  return lastRand;
+}
+function sfxMs(name) { const d = sfx[name].duration; return (isFinite(d) && d > 0 ? d : FALLBACK_LEN[name]) * 1000; }
+function playSfx(name) {
+  if (!soundOn) return;
+  const a = sfx[name]; a.currentTime = 0; a.volume = 1;
+  const p = a.play(); if (p && p.catch) p.catch(() => {});
+}
+function stopSfx(name, fadeMs) {
+  const a = sfx[name];
+  if (!fadeMs) { a.pause(); a.currentTime = 0; return; }
+  const t0 = performance.now(), v0 = a.volume;
+  (function step(now) {
+    const t = Math.min(1, (now - t0) / fadeMs);
+    a.volume = v0 * (1 - t);
+    if (t < 1) requestAnimationFrame(step); else { a.pause(); a.currentTime = 0; a.volume = 1; }
+  })(t0);
+}
+
+async function api(path, opts, extra) {
+  const r = await fetch(path + '?s=' + encodeURIComponent(token) + (extra || ''), opts);
   return r.json();
 }
 
@@ -134,10 +204,8 @@ function drawWheel(rotation) {
       a += ang;
     });
   }
-  // 金色外圈
   ctx.beginPath(); ctx.arc(cx, cy, R - 14, 0, TAU); ctx.lineWidth = 28; ctx.strokeStyle = '#EBAA28'; ctx.stroke();
   ctx.beginPath(); ctx.arc(cx, cy, R + 3, 0, TAU); ctx.lineWidth = 6; ctx.strokeStyle = '#784609'; ctx.stroke();
-  // 中心
   ctx.beginPath(); ctx.arc(cx, cy, 96, 0, TAU); ctx.fillStyle = '#1E1414'; ctx.fill();
   ctx.lineWidth = 16; ctx.strokeStyle = '#EBAA28'; ctx.stroke();
   ctx.font = "800 88px 'Noto Sans SC','Microsoft YaHei',sans-serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -174,15 +242,16 @@ function animateTo(endRot, ms) {
 }
 
 async function doSpin() {
-  if (spinning || !state || state.status !== 'idle') return;
+  if (spinning || !state || state.status !== 'idle') return false;
   $('spin').disabled = true;
-  const list = state.participants.slice();       // 转盘当前的分块顺序
+  const list = state.participants.slice();
   const total = list.reduce((s, p) => s + p.tickets, 0);
   const r = await api('/api/spin', { method: 'POST' });
-  if (!r.ok) { $('hint').textContent = r.error || '转不了，稍后再试'; refresh(); return; }
+  if (!r.ok) { $('hint').textContent = r.error || '转不了，稍后再试'; refresh(); return false; }
 
   spinning = true;
   hideOverlay();
+  playSfx('spin');
   let start = 0, span = 0;
   for (const p of list) {
     const ang = (p.tickets / total) * TAU;
@@ -196,9 +265,11 @@ async function doSpin() {
   const endRot = rot + TAU * 6 + delta;
 
   await animateTo(endRot, Math.max(1500, r.animMs - 300));
+  stopSfx('spin', 700);
   rot = endRot % TAU;
   spinning = false;
   await refresh();
+  return true;
 }
 
 /* ---------- 状态刷新与界面 ---------- */
@@ -206,7 +277,8 @@ async function refresh() {
   let s;
   try { s = await api('/api/state'); } catch (e) { return; }
   if (!s.ok) {
-    document.body.style.background='#14231C'; document.body.innerHTML = '<div class="gone">🎄 这个转盘链接已经失效。<br>请回到 Discord，重新执行 /draw-christmas 获取新链接。</div>';
+    document.body.style.background = '#14231C';
+    document.body.innerHTML = '<div class="gone">🎄 这个转盘链接已经失效。<br>请回到 Discord，重新执行 /draw-christmas 获取新链接。</div>';
     clearInterval(timer);
     return;
   }
@@ -215,55 +287,54 @@ async function refresh() {
   render();
 }
 
-function avatarHtml(url, cls) {
-  return url ? `<img class="${cls || ''}" src="${url}" alt="">` : `<div class="ph ${cls || ''}"></div>`;
-}
 function esc(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
 const ROW0 = 238, PITCH = 62.1, ROWH = 57;
 function rowHtml(i, w) {
   const top = Math.round(ROW0 + PITCH * (i + 0.5) - ROWH / 2);
-  if (!w) return `<div class="row empty" style="top:${top}px"><span class="num">${i + 1 + OFFSET}</span><div class="ph"></div><span class="nm">待抽取</span></div>`;
-  const lead = w.place <= 3 ? `<img class="crown" src="/wheel-assets/crown${w.place}.png" alt="">` : `<span class="num">${w.place}</span>`;
-  const ult = w.prize === 'ULTIMATE';
+  const place = i + 1;
+  if (!w || hiddenPlaces.has(place)) {
+    return `<div class="row empty" style="top:${top}px"><span class="num">${place}</span><div class="ph"></div><span class="nm">待抽取</span></div>`;
+  }
+  const lead = place <= 3 ? `<img class="crown" src="/wheel-assets/crown${place}.png" alt="">` : `<span class="num">${place}</span>`;
+  const ult = showPrize && w.prize === 'ULTIMATE';
   return `<div class="row ${ult ? 'ult' : ''}" style="top:${top}px">${lead}${w.avatarUrl ? `<img class="av" src="${w.avatarUrl}" alt="">` : '<div class="av"></div>'}<span class="nm">${ult ? '🌟' : ''}${esc(w.name)}</span><img class="snow" src="/wheel-assets/snow.png" alt=""></div>`;
 }
-let OFFSET = 0;
-function layout() {
-  const s = Math.min(innerWidth / 1672, innerHeight / 941);
-  $('stage').style.transform = `scale(${s}) translate(-836px,-470.5px)`;
+
+function topDone() {
+  const top = Math.min(3, state.target);
+  for (let p = 1; p <= top; p++) if (!state.winners.some((w) => w.place === p)) return false;
+  return true;
+}
+
+function renderControls() {
+  $('b-sound').textContent = `🔊 音效：${soundOn ? '开' : '关'}`;
+  $('b-sound').className = soundOn ? 'on' : '';
+  $('b-prize').textContent = `🎁 显示大礼：${showPrize ? '开' : '关'}`;
+  $('b-prize').className = showPrize ? 'on' : '';
+  const ok = state && topDone();
+  $('b-auto').textContent = `🤖 自动抽剩下：${autoOn ? '开' : '关'}`;
+  $('b-auto').className = autoOn ? 'on' : '';
+  $('b-auto').style.opacity = ok || autoOn ? 1 : 0.55;
+  $('b-auto').title = ok ? '' : '前 3 名抽完后才会开始自动抽';
+}
+
+function renderOrder() {
+  const o = state.order;
+  const box = $('order');
+  if (o.mode || state.status === 'done' || state.winners.length > 0) { box.hidden = true; return; }
+  box.hidden = false;
+  if (o.endsAt) {
+    const left = Math.max(0, Math.ceil((o.endsAt - (Date.now() + serverOffset)) / 1000));
+    $('order-info').innerHTML = `投票中，剩 <b>${left}</b> 秒<br>🔴 ${o.votes.desc} 票　🟢 ${o.votes.asc} 票`;
+  } else {
+    $('order-info').innerHTML = `投票结束（🔴 ${o.votes.desc} 票　🟢 ${o.votes.asc} 票）<br>请主厨决定顺序`;
+  }
 }
 
 function render() {
   $('badge').hidden = state.mode !== 'test';
-  $('entrants').textContent = `入场 ${state.participants.length} 人`;
-
-  const ws = state.winners;
-  OFFSET = Math.max(0, ws.length - 10);
-  const rows = [];
-  for (let i = 0; i < 10; i++) {
-    const w = ws[OFFSET + i];
-    rows.push(rowHtml(i, w));
-  }
-  $('rows').innerHTML = rows.join('');
-
-  const btn = $('spin'), hint = $('hint');
-  const next = ws.length + 1;
-  if (state.status === 'idle') {
-    btn.disabled = spinning; btn.textContent = '开始转动';
-    if (!spinning) $('ticker').textContent = `现在抽取：第 ${next} 位`;
-    hint.textContent = state.upgraded && ws.length < state.upgradeTop ? '🌟 这一位将获得「主厨豪华至尊大礼」！' : '';
-  } else if (state.status === 'done') {
-    btn.disabled = true; btn.textContent = '开奖完成';
-    $('ticker').textContent = `共 ${ws.length} 位得奖`;
-    hint.textContent = ws.length < state.target ? `有 ${state.target - ws.length} 个名额因无人在场而空缺` : '恭喜以上所有幸运伙伴！';
-  } else {
-    btn.disabled = true; btn.textContent = '转动中…';
-    if (!spinning) $('ticker').textContent = `第 ${next} 位 确认中`;
-    hint.textContent = '';
-  }
-
-  if (!spinning) drawWheel(rot);
+  $('entrants').textContent = `入场 ${state.entrants} 人`;
 
   if (!spinning) {
     if (state.status === 'waiting' && state.current) {
@@ -273,13 +344,65 @@ function render() {
       showResult(state.lastEvent);
     }
   }
+
+
+  const rows = [];
+  for (let i = 0; i < 10; i++) rows.push(rowHtml(i, state.winners.find((w) => w.place === i + 1)));
+  $('rows').innerHTML = rows.join('');
+  renderControls();
+  renderOrder();
+
+  const btn = $('spin'), hint = $('hint');
+  const next = state.nextPlace;
+  const needOrder = !state.order.mode;
+  if (state.status === 'idle') {
+    btn.disabled = spinning || needOrder;
+    btn.textContent = needOrder ? '等待决定顺序' : '开始转动';
+    if (!spinning) $('ticker').textContent = next ? `现在抽取：第 ${next} 位` : ' ';
+    hint.textContent = showPrize && state.upgraded && next && next <= state.upgradeTop ? '🌟 这一位将获得「主厨豪华至尊大礼」！' : '';
+  } else if (state.status === 'done') {
+    btn.disabled = true; btn.textContent = '开奖完成';
+    $('ticker').textContent = `共 ${state.winners.length} 位得奖`;
+    hint.textContent = state.winners.length < state.target ? `有 ${state.target - state.winners.length} 个名额因无人在场而空缺` : '恭喜以上所有幸运伙伴！';
+  } else {
+    btn.disabled = true; btn.textContent = '确认中…';
+    if (!spinning) $('ticker').textContent = next ? `第 ${next} 位 确认中` : ' ';
+    hint.textContent = '';
+  }
+
+  if (!spinning) drawWheel(rot);
+
+  // 自动抽剩下的名额：前 3 名抽完、弹窗和音效播完之后，自己接着转
+  if (autoOn && !spinning && state.status === 'idle' && state.order.mode && topDone() && Date.now() > busyUntil + 800) {
+    doSpin().then((ok) => {
+      if (ok === false && ++autoFails >= 3) { autoOn = false; autoFails = 0; renderControls(); $('hint').textContent = '自动抽遇到问题，已暂停'; }
+      if (ok) autoFails = 0;
+    });
+  }
 }
 
-function showOverlay(avatarUrl, title, name, sub) {
-  $('ov-avatar-wrap').innerHTML = avatarHtml(avatarUrl);
+/* ---------- 弹窗 ---------- */
+function setFade(el, delay, dur) {
+  el.style.transition = 'none'; el.style.opacity = 0;
+  void el.offsetWidth;
+  setTimeout(() => { el.style.transition = `opacity ${dur}ms ease`; el.style.opacity = 1; }, delay);
+}
+function clearFade(el) { el.style.transition = 'none'; el.style.opacity = 1; }
+
+function fitName(name) {
+  const el = $('ov-name');
+  const n = Array.from(name).length;
+  el.style.fontSize = n <= 7 ? '' : `${Math.max(4.2, 8.4 * 7 / n)}cqw`;
+}
+
+function showOverlay({ avatarUrl, name, title, plate, bar }) {
+  const av = $('ov-avin');
+  av.innerHTML = avatarUrl ? `<img src="${avatarUrl}" alt="">` : esc(Array.from(name || '?')[0]);
   $('ov-title').textContent = title;
   $('ov-name').textContent = name;
-  $('ov-sub').innerHTML = sub;
+  fitName(name || '');
+  $('ov-plate').innerHTML = plate;
+  $('ov-bar').textContent = bar;
   $('overlay').classList.remove('hidden');
 }
 function hideOverlay() { clearTimeout(overlayTimer); $('overlay').classList.add('hidden'); }
@@ -287,24 +410,49 @@ function hideOverlay() { clearTimeout(overlayTimer); $('overlay').classList.add(
 function showPick() {
   const c = state.current;
   clearTimeout(overlayTimer);
-  let sub;
-  if (state.mode === 'test') sub = '预演模式：不检查是否在场';
+  ['ov-avin', 'ov-name', 'ov-plate'].forEach((id) => clearFade($(id)));
+  let plate;
+  if (state.mode === 'test') plate = '预演模式：不检查是否在场';
   else {
     const left = Math.max(0, Math.ceil((c.deadline - (Date.now() + serverOffset)) / 1000));
-    sub = `请在 <b>${left}</b> 秒内进入语音频道 <b>${esc(state.channelName || '直播频道')}</b>`;
+    plate = `请在 <b>${left}</b> 秒内进入「${esc(state.channelName || '直播频道')}」`;
   }
-  showOverlay(c.avatarUrl, `第 ${c.place} 位 · 抽到了`, c.name, sub);
+  showOverlay({ avatarUrl: c.avatarUrl, name: c.name, title: `第 ${c.place} 位 · 抽到了`, plate, bar: '确认中…' });
 }
 
 function showResult(ev) {
+  clearTimeout(overlayTimer);
   if (ev.type === 'win') {
+    const place = ev.place;
+    const top = place <= 3;
+    const snd = sfxFor(place);
+    const len = sfxMs(snd);
     const ult = ev.prize === 'ULTIMATE';
-    showOverlay(ev.avatarUrl, `🎉 第 ${ev.place} 位得奖`, ev.name, ult ? '🌟 主厨豪华至尊大礼' : '🎁 圣诞神秘盲盒');
-    burst();
+    const plate = showPrize ? (ult ? '🌟 主厨豪华至尊大礼' : '🎁 圣诞神秘盲盒') : `🎟️ 持有 <b>${ev.tickets ?? '?'}</b> 张签`;
+    const next = state.nextPlace;
+    showOverlay({ avatarUrl: ev.avatarUrl, name: ev.name, title: `第 ${place} 位得奖`, plate, bar: next ? `下一位：第 ${next} 位` : '开奖完成' });
+    playSfx(snd);
+    let revealAt = 0;
+    if (top) {
+      hiddenPlaces.add(place);
+      setFade($('ov-avin'), len * 0.18, len * 0.32);
+      setFade($('ov-name'), len * 0.42, len * 0.28);
+      setFade($('ov-plate'), len * 0.55, len * 0.25);
+      revealAt = len * 0.42;
+    } else {
+      ['ov-avin', 'ov-name', 'ov-plate'].forEach((id) => clearFade($(id)));
+    }
+    setTimeout(burst, revealAt);
+    const hold = top ? len + 2500 : Math.max(5500, len + 1500);
+    busyUntil = Date.now() + hold;
+    overlayTimer = setTimeout(() => { hideOverlay(); hiddenPlaces.delete(place); if (state) render(); }, hold);
+    if (top) setTimeout(() => { hiddenPlaces.delete(place); if (state && !spinning) render(); }, revealAt + 600);
   } else {
-    showOverlay(ev.avatarUrl, '⏰ 没有在场', ev.name, '视为放弃，重新抽取');
+    ['ov-avin', 'ov-name', 'ov-plate'].forEach((id) => clearFade($(id)));
+    showOverlay({ avatarUrl: ev.avatarUrl, name: ev.name, title: '⏰ 没有在场', plate: '视为放弃', bar: '重新抽取' });
+    busyUntil = Date.now() + 4000;
+    overlayTimer = setTimeout(hideOverlay, 4000);
   }
-  overlayTimer = setTimeout(hideOverlay, 5500);
 }
 
 /* ---------- 彩带 ---------- */
@@ -313,11 +461,12 @@ let parts = [];
 function burst() {
   cf.width = innerWidth; cf.height = innerHeight;
   const colors = ['#E8B84A', '#C0392B', '#1F7A4D', '#F6F1E7', '#2C6FA3'];
+  const was = parts.length;
   for (let i = 0; i < 160; i++) {
     parts.push({ x: innerWidth / 2, y: innerHeight / 2, vx: (Math.random() - 0.5) * 22, vy: -Math.random() * 20 - 4,
       s: 6 + Math.random() * 8, c: colors[i % colors.length], r: Math.random() * TAU, vr: (Math.random() - 0.5) * 0.4, life: 120 + Math.random() * 60 });
   }
-  if (parts.length === 160) requestAnimationFrame(tickConfetti);
+  if (!was) requestAnimationFrame(tickConfetti);
 }
 function tickConfetti() {
   cctx.clearRect(0, 0, cf.width, cf.height);
@@ -329,7 +478,18 @@ function tickConfetti() {
   if (parts.length) requestAnimationFrame(tickConfetti); else cctx.clearRect(0, 0, cf.width, cf.height);
 }
 
+/* ---------- 按钮 ---------- */
+function layout() {
+  const s = Math.min(innerWidth / 1672, innerHeight / 941);
+  $('stage').style.transform = `scale(${s}) translate(-836px,-470.5px)`;
+}
 $('spin').addEventListener('click', doSpin);
+$('b-sound').addEventListener('click', () => { soundOn = !soundOn; lsSet('wheel.sound', soundOn); if (!soundOn) Object.keys(sfx).forEach((k) => stopSfx(k, 0)); if (state) renderControls(); });
+$('b-prize').addEventListener('click', () => { showPrize = !showPrize; lsSet('wheel.prize', showPrize); if (state) render(); });
+$('b-auto').addEventListener('click', () => { autoOn = !autoOn; autoFails = 0; if (state) renderControls(); });
+async function chooseOrder(mode) { const r = await api('/api/order', { method: 'POST' }, '&mode=' + mode); if (!r.ok) $('hint').textContent = r.error || ''; refresh(); }
+$('o-desc').addEventListener('click', () => chooseOrder('desc'));
+$('o-asc').addEventListener('click', () => chooseOrder('asc'));
 addEventListener('resize', layout); layout();
 const timer = setInterval(() => { if (!spinning) refresh(); }, 1000);
 refresh();

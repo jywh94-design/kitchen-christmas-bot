@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const cfg = require('./config');
 const { computeTickets } = require('./rules');
+const { isExcluded, sqlList } = require('./excluded');
 
 // Railway 的公网数据库地址需要 SSL；内网地址（railway.internal）不需要
 const dbUrl = process.env.DATABASE_URL || '';
@@ -102,6 +103,7 @@ function isEventActive() {
 // ---------- 活跃数据累加 ----------
 async function addActivity(userId, { voiceSec = 0, msgCount = 0 }) {
   if (!isEventActive()) return null;
+  if (isExcluded(userId)) return null; // 小号、不参加的管理员：不记录任何活动
   const dateStr = getMYDateString();
   const reqVoiceSec = cfg.DAILY_VOICE_MINUTES * 60;
   const reqMsgCount = cfg.DAILY_MESSAGES;
@@ -150,7 +152,7 @@ async function addActivity(userId, { voiceSec = 0, msgCount = 0 }) {
 }
 
 // ---------- 签数汇总 ----------
-const SUMMARY_SQL = `
+const summarySql = () => `
   SELECT s.user_id, s.voice_seconds, s.valid_messages, s.has_entry_role,
          COALESCE(d.valid_days, 0) AS valid_days,
          COALESCE(i.cnt, 0) AS verified_invites
@@ -163,6 +165,7 @@ const SUMMARY_SQL = `
     SELECT inviter_id, COUNT(*)::int AS cnt
     FROM invite_records
     WHERE is_verified = TRUE AND NOT COALESCE(left_guild, FALSE)
+      AND invitee_id NOT IN (${sqlList()})
     GROUP BY inviter_id
   ) i ON i.inviter_id = s.user_id
 `;
@@ -186,7 +189,7 @@ function toSummary(row) {
 }
 
 async function getUserTicketSummary(userId) {
-  const res = await pool.query(`${SUMMARY_SQL} WHERE s.user_id = $1`, [userId]);
+  const res = await pool.query(`${summarySql()} WHERE s.user_id = $1`, [userId]);
   if (res.rows[0]) return toSummary(res.rows[0]);
   // 还没有任何记录的新用户
   return toSummary({
@@ -201,12 +204,13 @@ async function getUserTicketSummary(userId) {
 
 // 全服统计：只有已解锁入场的人才算参与者
 async function getAllParticipantsSummary() {
-  const res = await pool.query(SUMMARY_SQL);
+  const res = await pool.query(summarySql());
   const participants = [];
   let totalServerTickets = 0;
   let totalEntryUsers = 0;
 
   for (const row of res.rows) {
+    if (isExcluded(row.user_id)) continue; // 小号、不参加的管理员不进抽奖池和排行榜
     const summary = toSummary(row);
     if (summary.unlockedEntry && summary.totalTickets > 0) {
       participants.push(summary);

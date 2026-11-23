@@ -4,7 +4,9 @@ const cron = require('node-cron');
 const cfg = require('./config');
 const { pool, initDB, isEventActive, addActivity, getMYParts } = require('./db');
 const { handleCommand } = require('./commands');
+const { handleVoteButton } = require('./draw');
 const { buildReport } = require('./report');
+const { buildBackup } = require('./backup');
 const { registerCommands } = require('./register');
 const { startWebServer } = require('./web');
 
@@ -117,6 +119,23 @@ client.once(Events.ClientReady, async () => {
   }, 10 * 60 * 1000);
 
   // 每天马来西亚时间 00:00 自动发送全服战报（12月1日 - 12月24日）
+  // 每天 00:00 把数据备份表格发到管理员频道（11 月测试期也备份，方便确认功能正常）
+  cron.schedule(
+    '2 0 * * *',
+    async () => {
+      const backupChannelId = process.env.BACKUP_CHANNEL_ID;
+      if (!backupChannelId) return;
+      try {
+        const channel = await client.channels.fetch(backupChannelId);
+        const { content, files } = await buildBackup(guild, `💾 **每日数据备份** ${getMYParts().dateString}`);
+        await channel.send({ content, files });
+      } catch (err) {
+        console.error('每日备份发送失败:', err.message);
+      }
+    },
+    { timezone: 'Asia/Kuala_Lumpur' }
+  );
+
   cron.schedule(
     '0 0 * * *',
     async () => {
@@ -238,6 +257,14 @@ client.on(Events.InviteCreate, (invite) => {
 
 // ---------- 斜杠指令 ----------
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isButton() && interaction.customId.startsWith('wheelvote:')) {
+    try {
+      await handleVoteButton(interaction);
+    } catch (err) {
+      console.error('投票按钮异常:', err.message);
+    }
+    return;
+  }
   if (!interaction.isChatInputCommand()) return;
   try {
     await handleCommand(interaction);

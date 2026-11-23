@@ -1,7 +1,7 @@
 // 幸运转盘开奖的核心逻辑：抽签、在场检查、保存结果、Discord 播报
 // 转盘网页只负责「展示和按按钮」，真正抽谁由这里（服务器）决定。
 const crypto = require('crypto');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const cfg = require('./config');
 const { pool, getAllParticipantsSummary } = require('./db');
 const { winnersFor } = require('./rules');
@@ -30,7 +30,8 @@ function pickWeighted(candidates) {
 }
 
 function buildResultEmbed(winners, extra = {}) {
-  const lines = winners.map((w, i) => `**第 ${i + 1} 位**：<@${w.userId}> ➔ ${PRIZE_TEXT[w.prize] || PRIZE_TEXT.BLINDBOX}`);
+  winners = [...winners].sort((a, b) => a.place - b.place);
+  const lines = winners.map((w) => `**第 ${w.place} 位**：<@${w.userId}> ➔ ${PRIZE_TEXT[w.prize] || PRIZE_TEXT.BLINDBOX}`);
   const embed = new EmbedBuilder()
     .setColor(0xf1c40f)
     .setTitle(extra.title || `🎉 2026 圣诞厨房寻宝季 · ${winners.length} 位得奖名单`)
@@ -42,8 +43,115 @@ function buildResultEmbed(winners, extra = {}) {
 
 function closeSession(session) {
   clearTimeout(session.timers.reveal);
+  clearTimeout(session.timers.vote);
   clearInterval(session.timers.poll);
   sessions.delete(session.token);
+}
+
+// ---------- 前 3 名的抽奖顺序：desc = 先抽第 3 名、最后抽第 1 名；asc = 先抽第 1 名 ----------
+function topCount(target) {
+  return Math.min(3, target);
+}
+// 没有需要选择的情况（名额不足 2 位、前几名已抽完）就直接定下来
+function initialOrderMode(winners, target) {
+  const top = topCount(target);
+  if (top < 2) return 'asc';
+  const done = winners.filter((w) => w.place <= top).length;
+  if (done >= top) return 'asc';
+  if (winners.length === 0) return null;
+  return winners.some((w) => w.place === top) ? 'desc' : 'asc';
+}
+function placeSequence(session) {
+  const top = topCount(session.target);
+  const seq = [];
+  if (session.order.mode === 'desc') for (let p = top; p >= 1; p--) seq.push(p);
+  else for (let p = 1; p <= top; p++) seq.push(p);
+  for (let p = top + 1; p <= session.target; p++) seq.push(p);
+  return seq;
+}
+function nextPlace(session) {
+  const have = new Set(session.winners.map((w) => w.place));
+  return placeSequence(session).find((p) => !have.has(p)) ?? null;
+}
+
+function voteTally(session) {
+  let desc = 0;
+  let asc = 0;
+  for (const v of session.order.votes.values()) v === 'desc' ? desc++ : asc++;
+  return { desc, asc };
+}
+
+// 在 Discord 频道发起投票（只有已入场的人能投）
+async function startVote(session) {
+  if (session.order.mode || session.order.endsAt) return;
+  const secs = cfg.VOTE_SECONDS;
+  session.order.endsAt = Date.now() + secs * 1000;
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`wheelvote:${session.token}:desc`).setLabel('先抽第 3 名，最后揭晓第 1 名').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`wheelvote:${session.token}:asc`).setLabel('先抽第 1 名').setStyle(ButtonStyle.Success)
+  );
+  session.order.message = await session.channel
+    .send({
+      content:
+        `🗳️ **前 3 名怎么抽？大家投票决定！**（${secs} 秒内，只有已入场的人能投，可以改票）
+` +
+        '🔴 先抽第 3 名，最后揭晓冠军\n🟢 先抽第 1 名',
+      components: [row],
+    })
+    .catch((e) => { logErr(e); return null; });
+  session.timers.vote = setTimeout(() => finishVote(session).catch(logErr), secs * 1000);
+}
+
+async function finishVote(session) {
+  if (session.order.mode) return;
+  clearTimeout(session.timers.vote);
+  const { desc, asc } = voteTally(session);
+  session.order.endsAt = null;
+  let text;
+  if (desc === asc) {
+    text = `🗳️ **投票结束：${desc} 对 ${asc}${desc === 0 ? '（没人投票）' : '，平票'}**，由主厨决定抽奖顺序！`;
+  } else {
+    session.order.mode = desc > asc ? 'desc' : 'asc';
+    text = `🗳️ **投票结束（${desc} 比 ${asc}）**：${session.order.mode === 'desc' ? '先抽第 3 名，最后揭晓第 1 名！' : '先抽第 1 名！'}`;
+  }
+  await closeVoteMessage(session, text);
+}
+
+async function closeVoteMessage(session, text) {
+  const msg = session.order.message;
+  if (msg) await msg.edit({ content: text, components: [] }).catch(logErr);
+  else await say(session, text);
+}
+
+// 主厨在网页上直接指定顺序（会结束投票）
+async function setOrder(session, mode) {
+  if (!['asc', 'desc'].includes(mode)) return { ok: false, error: '顺序不正确' };
+  if (session.winners.length > 0 || session.status !== 'idle') return { ok: false, error: '已经开始抽了，不能再改顺序' };
+  const wasVoting = !!session.order.endsAt;
+  clearTimeout(session.timers.vote);
+  session.order.mode = mode;
+  session.order.endsAt = null;
+  if (wasVoting || session.order.message) {
+    await closeVoteMessage(session, `🎡 主厨决定：${mode === 'desc' ? '先抽第 3 名，最后揭晓第 1 名！' : '先抽第 1 名！'}`);
+  }
+  return { ok: true };
+}
+
+// 按钮：成员投票
+async function handleVoteButton(interaction) {
+  const [, token, choice] = interaction.customId.split(':');
+  const session = getSession(token);
+  if (!session || session.order.mode || !session.order.endsAt) {
+    return interaction.reply({ content: '这次投票已经结束了。', flags: MessageFlags.Ephemeral });
+  }
+  if (!session.testMode && !session.eligible.has(interaction.user.id)) {
+    return interaction.reply({ content: '只有已解锁入场的人才能投票哦。', flags: MessageFlags.Ephemeral });
+  }
+  session.order.votes.set(interaction.user.id, choice === 'desc' ? 'desc' : 'asc');
+  return interaction.reply({
+    content: `✅ 已记录你的投票：${choice === 'desc' ? '先抽第 3 名，最后揭晓第 1 名' : '先抽第 1 名'}（时间内可以改票）`,
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 // 创建一场开奖。正式开奖会读取已保存的得奖者，中途断线也能接着抽。
@@ -86,6 +194,8 @@ async function createSession({ guild, channel, voiceChannel, testMode }) {
     winners,
     absentCount: 0,
     status: winners.length >= target || candidates.length === 0 ? 'done' : 'idle', // idle | spinning | waiting | done
+    order: { mode: initialOrderMode(winners, target), endsAt: null, votes: new Map(), message: null },
+    eligible: new Set([...participants.map((p) => p.userId), ...winners.map((w) => w.userId)]),
     current: null,
     lastEvent: null,
     createdAt: Date.now(),
@@ -120,6 +230,7 @@ function sessionState(session) {
     mode: session.testMode ? 'test' : 'live',
     status: session.status,
     target: session.target,
+    entrants: session.totalEntryUsers,
     upgraded: session.upgraded,
     upgradeTop: cfg.UPGRADE_TOP_COUNT,
     claimSeconds: cfg.DRAW_CLAIM_SECONDS,
@@ -127,8 +238,15 @@ function sessionState(session) {
     channelName: session.voiceChannel?.name || null,
     totalTickets: session.candidates.reduce((s, c) => s + c.tickets, 0),
     participants: session.candidates.map((c) => ({ id: c.userId, name: nameOf(session, c.userId), tickets: c.tickets })),
-    winners: session.winners.map((w) => ({
+    order: {
+      mode: session.order.mode,
+      endsAt: session.order.endsAt,
+      votes: voteTally(session),
+    },
+    nextPlace: nextPlace(session),
+    winners: [...session.winners].sort((a, b) => a.place - b.place).map((w) => ({
       place: w.place,
+      tickets: w.tickets,
       id: w.userId,
       name: nameOf(session, w.userId),
       avatarUrl: avatarOf(session, w.userId),
@@ -140,6 +258,7 @@ function sessionState(session) {
           name: nameOf(session, cur.userId),
           avatarUrl: avatarOf(session, cur.userId),
           place: cur.place,
+          tickets: cur.tickets,
           deadline: cur.deadline,
         }
       : null,
@@ -165,12 +284,15 @@ function spin(session) {
   if (session.candidates.length === 0 || session.winners.length >= session.target) {
     return { ok: false, error: '名额已满' };
   }
+  if (!session.order.mode) return { ok: false, error: '请先决定前 3 名的抽奖顺序（等投票结束，或在页面上直接选）' };
+  const place = nextPlace(session);
+  if (place === null) return { ok: false, error: '名额已满' };
   const picked = pickWeighted(session.candidates);
   const now = Date.now();
   session.current = {
     userId: picked.userId,
     tickets: picked.tickets,
-    place: session.winners.length + 1,
+    place,
     revealAt: now + ANIM_MS,
     deadline: now + ANIM_MS + cfg.DRAW_CLAIM_SECONDS * 1000,
   };
@@ -220,7 +342,7 @@ async function confirmWinner(session) {
 
   session.winners.push({ place, userId: cur.userId, prize, tickets: cur.tickets });
   session.candidates = session.candidates.filter((c) => c.userId !== cur.userId);
-  session.lastEvent = { type: 'win', at: Date.now(), place, id: cur.userId, name: nameOf(session, cur.userId), avatarUrl: avatarOf(session, cur.userId), prize };
+  session.lastEvent = { type: 'win', at: Date.now(), place, tickets: cur.tickets, id: cur.userId, name: nameOf(session, cur.userId), avatarUrl: avatarOf(session, cur.userId), prize };
   session.current = null;
 
   if (!session.testMode) {
@@ -268,4 +390,4 @@ async function finishIfDone(session) {
   });
 }
 
-module.exports = { createSession, getSession, sessionState, spin, buildResultEmbed, closeSession };
+module.exports = { createSession, getSession, sessionState, spin, buildResultEmbed, closeSession, startVote, setOrder, handleVoteButton };

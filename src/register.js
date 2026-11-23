@@ -39,7 +39,8 @@ function buildCommands() {
             { name: '2. 预览每日 00:00 全服战报', value: 'preview_report' },
             { name: '3. 清空全部活动数据（需要再填 confirm）', value: 'reset' },
             { name: '4. 清除正式开奖记录（只在需要重新开奖时用）', value: 'clear_draw' },
-            { name: '5. 立即把战报发到战报频道（测试发送权限用）', value: 'send_report' }
+            { name: '5. 立即把战报发到战报频道（测试发送权限用）', value: 'send_report' },
+            { name: '6. 立即把数据备份表格发到备份频道（测试用）', value: 'send_backup' }
           )
       )
       .addStringOption((o) =>

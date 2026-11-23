@@ -2,7 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { getSession, sessionState, spin } = require('./draw');
+const { getSession, sessionState, spin, setOrder } = require('./draw');
 
 const PAGE_PATH = path.join(__dirname, '..', 'web', 'wheel.html');
 
@@ -29,7 +29,7 @@ function startWebServer() {
       }
       if (url.pathname.startsWith('/wheel-assets/')) {
         const name = path.basename(url.pathname);
-        const types = { '.jpg': 'image/jpeg', '.png': 'image/png' };
+        const types = { '.jpg': 'image/jpeg', '.png': 'image/png', '.mp3': 'audio/mpeg' };
         const type = types[path.extname(name)];
         const file = path.join(ASSET_DIR, name);
         if (!type || !fs.existsSync(file)) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
@@ -40,7 +40,7 @@ function startWebServer() {
         return send(res, 200, fs.readFileSync(PAGE_PATH), 'text/html; charset=utf-8');
       }
 
-      if (url.pathname === '/api/state' || url.pathname === '/api/spin') {
+      if (url.pathname === '/api/state' || url.pathname === '/api/spin' || url.pathname === '/api/order') {
         const session = getSession(url.searchParams.get('s') || '');
         if (!session) return json(res, 404, { ok: false, error: 'NOT_FOUND' });
 
@@ -49,6 +49,11 @@ function startWebServer() {
         }
         if (url.pathname === '/api/spin' && req.method === 'POST') {
           return json(res, 200, spin(session));
+        }
+        if (url.pathname === '/api/order' && req.method === 'POST') {
+          return setOrder(session, url.searchParams.get('mode') || '')
+            .then((r) => json(res, 200, r))
+            .catch(() => json(res, 500, { ok: false, error: 'SERVER' }));
         }
         return json(res, 405, { ok: false, error: 'METHOD' });
       }

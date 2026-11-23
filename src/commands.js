@@ -6,9 +6,11 @@ const {
   getEventWindow,
 } = require('./db');
 const { nextTier, entryNeededForMaxWinners } = require('./rules');
-const { createSession, buildResultEmbed } = require('./draw');
+const { createSession, buildResultEmbed, startVote } = require('./draw');
 const { buildReport } = require('./report');
 const { renderTicketImage } = require('./ticketImage');
+const { isExcluded } = require('./excluded');
+const { buildBackup } = require('./backup');
 const { getRanking, rankOf, invalidateRankCache, fetchAvatar } = require('./ranking');
 
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -50,6 +52,9 @@ async function handleCommand(interaction) {
 // =====================================================================
 async function cmdMyTickets(interaction) {
   await interaction.deferReply({ flags: EPHEMERAL });
+  if (isExcluded(interaction.user.id)) {
+    return interaction.editReply('这个账号不参与本次活动，所以没有幸运签记录。');
+  }
   const s = await getUserTicketSummary(interaction.user.id);
   const maxTotal = cfg.MAX_BASE_TICKETS + cfg.MAX_INVITE_TICKETS;
 
@@ -280,6 +285,7 @@ async function cmdDraw(interaction) {
     `🎡 **幸运转盘开奖开始！**${testMode ? '（预演）' : ''}本次抽 **${session.target}** 位` +
       (voiceChannel ? `，大家请待在 <#${voiceChannel.id}>！` : '！')
   );
+  await startVote(session); // 前 3 名顺序：已入场的人投票决定
 }
 
 // =====================================================================
@@ -371,6 +377,20 @@ async function cmdTestSimulate(interaction) {
       );
     }
     return interaction.editReply(`✅ 已发送到 <#${channelId}>，去看看图片和文字显示对不对。`);
+  }
+
+  if (action === 'send_backup') {
+    await interaction.deferReply({ flags: EPHEMERAL });
+    const channelId = process.env.BACKUP_CHANNEL_ID;
+    if (!channelId) return interaction.editReply('❌ 还没设置 `BACKUP_CHANNEL_ID`（只有管理员能看到的备份频道 ID）。');
+    try {
+      const target = await interaction.client.channels.fetch(channelId);
+      const { content, files } = await buildBackup(interaction.guild, '🧪 数据备份（测试发送）');
+      await target.send({ content, files });
+    } catch (err) {
+      return interaction.editReply(`❌ 备份发送失败：${err.message}\n请检查机器人在该频道有没有「查看频道」「发送消息」「附加文件」权限。`);
+    }
+    return interaction.editReply(`✅ 备份表格已发送到 <#${channelId}>。`);
   }
 
   if (action === 'clear_draw') {

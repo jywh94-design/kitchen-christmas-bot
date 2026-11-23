@@ -3,15 +3,15 @@ const assert = require('assert');
 const { computeTickets, winnersFor, nextWinnerStep, nextTier, entryNeededForMaxWinners } = require('../src/rules');
 
 // ---- 得奖名额 ----
-const expectWinners = { 0: 3, 14: 3, 15: 4, 19: 4, 20: 5, 25: 6, 30: 7, 35: 8, 40: 9, 44: 9, 45: 10, 80: 10 };
+const expectWinners = { 0: 3, 9: 3, 10: 4, 13: 4, 14: 5, 17: 5, 18: 6, 22: 7, 26: 8, 30: 9, 33: 9, 34: 10, 45: 10, 80: 10 };
 for (const [entry, want] of Object.entries(expectWinners)) {
   assert.strictEqual(winnersFor(Number(entry)), want, `入场 ${entry} 人应该抽 ${want} 位`);
 }
-assert.deepStrictEqual(nextWinnerStep(14), { need: 1, count: 4 });
-assert.deepStrictEqual(nextWinnerStep(15), { need: 5, count: 5 });
-assert.deepStrictEqual(nextWinnerStep(44), { need: 1, count: 10 });
-assert.strictEqual(nextWinnerStep(45), null);
-assert.strictEqual(entryNeededForMaxWinners(), 45);
+assert.deepStrictEqual(nextWinnerStep(9), { need: 1, count: 4 });
+assert.deepStrictEqual(nextWinnerStep(10), { need: 4, count: 5 });
+assert.deepStrictEqual(nextWinnerStep(33), { need: 1, count: 10 });
+assert.strictEqual(nextWinnerStep(34), null);
+assert.strictEqual(entryNeededForMaxWinners(), 34);
 
 // ---- 签数 ----
 // 没解锁入场：就算语音、聊天、拉新很多，也一律 0 签

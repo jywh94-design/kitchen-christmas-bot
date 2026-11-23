@@ -24,13 +24,14 @@ const cfg = {
   // ================= 5. 开奖：名额随入场人数增加 =================
   CHRISTMAS_WINNERS_COUNT: 10,   // 得奖名额上限
   WINNERS_BASE: 3,               // 入场人数不满 WINNERS_FIRST_STEP_ENTRY 时的保底名额
-  WINNERS_FIRST_STEP_ENTRY: 15,  // 入场满这个人数，名额 +1（即 4 位）
-  WINNERS_STEP_USERS: 5,         // 之后每多这么多人入场，名额再 +1，直到上限
+  WINNERS_FIRST_STEP_ENTRY: 10,  // 入场满这个人数，名额 +1（即 4 位）
+  WINNERS_STEP_USERS: 4,         // 之后每多这么多人入场，名额再 +1，直到上限
 
   UPGRADE_ENTRY_THRESHOLD: 45,   // 入场人数达到多少人，触发大奖升级
   UPGRADE_TOP_COUNT: 3,          // 触发后，最先抽出的几位升级为「主厨豪华至尊大礼」
 
   DRAW_CLAIM_SECONDS: 30,        // 被抽中后，多少秒内必须在直播语音频道，否则当场重抽
+  VOTE_SECONDS: 90,              // 前 3 名抽奖顺序投票时长（秒），只有已入场的人能投
 
   // ================= 6. 安全保护 =================
   // 这个时间点之后，/test-simulate 的「清空」会被拒绝（除非 Railway 变量里设置 ALLOW_RESET=true）
@@ -54,6 +55,7 @@ if (cfg.TEST_FAST) {
     VOICE_HOUR_TIERS: [0.02, 0.05],   // 约 1.2 分钟、3 分钟各 +1 签
     TOTAL_MESSAGE_TIERS: [5, 10],     // 5 条、10 条各 +1 签
     DRAW_CLAIM_SECONDS: 15,        // 被抽到后 15 秒内要在场
+    VOTE_SECONDS: 20,              // 投票缩短到 20 秒
   });
   console.warn('⚠️ 快速测试模式已开启（TEST_FAST=true）：规则门槛已放宽，仅用于实测！');
 } else if (fastRequested && !fastAllowed) {
