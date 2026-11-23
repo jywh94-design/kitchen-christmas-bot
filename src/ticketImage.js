@@ -1,4 +1,4 @@
-// 把「我的幸运签筒」画成一张圣诞风图片（坐标对应 assets/tickets/template.png，1596×986）
+// 把「我的幸运签筒」画成一张圣诞风图片（坐标对应 assets/tickets/template.png，1672×941）
 const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 
@@ -13,24 +13,24 @@ const MUTED = 'rgba(74,29,18,0.45)';
 
 // ---- 版面坐标 ----
 const L = {
-  avatar: { x: 112, y: 226, size: 346 }, // 头像先画成方形，再用 avatar-mask.png 裁成青色区域的形状
-  greeting: { x: 645, y: 198, size: 33, maxW: 670, nameMaxW: 300 },
+  avatar: { x: 126, y: 211, size: 347 }, // 头像先画成方形，再用 avatar-mask.png 裁成圆框的形状
+  greeting: { x: 677, y: 192, size: 32, maxW: 690, nameMaxW: 300 },
   cards: [
-    { cx: 715, cy: 322, size: 52, color: RED }, // 当前总幸运签
-    { cx: 1045, cy: 322, size: 46, color: INK }, // 日常签
-    { cx: 1345, cy: 322, size: 46, color: INK }, // 拉新签
+    { cx: 748, cy: 313, size: 50, color: RED }, // 当前总幸运签
+    { cx: 1107, cy: 313, size: 46, color: INK }, // 日常签
+    { cx: 1408, cy: 313, size: 46, color: INK }, // 拉新签
   ],
-  bar: { sx: 788, sy: 386, innerLeft: 801, innerW: 468 }, // 进度条素材左上角、绿色区域起点和宽度
-  pct: { cx: 1345, cy: 409, size: 36 },
-  check: { x: 1409, y: 378 },
-  rowsY: [540, 580, 620, 660],
-  rowsX: 775,
+  bar: { sx: 810, sy: 360, innerLeft: 838, innerW: 494 }, // 进度条素材左上角、绿色区域起点和宽度
+  pct: { cx: 1409, cy: 394, size: 34 },
+  check: { x: 1478, y: 361 },
+  rowsY: [523, 563, 603, 642],
+  rowsX: 810,
   rowsSize: 27,
-  rowsMaxW: 200,
-  pillLeft: 765,
+  rowsMaxW: 165,
+  pillLeft: 800,
   pillHalfH: 17,
-  tip: { x: 1052, y: 563, lineH: 40, size: 28, maxW: 335, maxLines: 3 },
-  footer: { cx: 995, cy: 745, size: 28, maxW: 690 },
+  tip: { x: 1103, y: 548, lineH: 40, size: 28, maxW: 320, maxLines: 3 },
+  footer: { cx: 1042, cy: 722, size: 28, maxW: 640 },
 };
 const PILL_DAYS = { fill: 'rgb(252,205,195)', text: 'rgb(150,40,35)' };
 const PILL_OTHER = { fill: 'rgb(190,232,150)', text: INK };

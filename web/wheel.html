@@ -6,77 +6,68 @@
 <meta name="robots" content="noindex">
 <title>圣诞厨房寻宝季 · 幸运转盘</title>
 <style>
-  :root { --pine:#14231C; --pine2:#1F3429; --cream:#F6F1E7; --gold:#E8B84A; --red:#C0392B; --mist:#B9C8BE; }
+  :root { --ink:#4A1D12; --red:#B3261E; --gold:#E8B84A; --cream:#FFF1D6; }
   * { box-sizing: border-box; }
   html, body { margin:0; height:100%; }
-  body {
-    background: radial-gradient(ellipse at 30% 20%, #234536 0%, var(--pine) 60%, #0d1813 100%);
-    color: var(--cream);
-    font-family: 'Noto Sans SC','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
-    overflow: hidden;
-  }
-  header { display:flex; align-items:center; gap:16px; padding:18px 32px; }
-  header h1 { margin:0; font-size: clamp(22px, 2.6vw, 38px); letter-spacing: 2px; }
-  #badge { margin-left:auto; background: var(--gold); color: var(--pine); font-weight:700; padding:4px 14px; border-radius:999px; font-size:18px; }
-  main { display:grid; grid-template-columns: minmax(0,1fr) 360px; gap:24px; padding: 0 32px 24px; height: calc(100% - 76px); }
-  .stage { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; min-height:0; }
-  .wheelwrap { position:relative; width: min(66vh, 58vw); height: min(66vh, 58vw); margin-top:14px; }
-  #wheel { width:100%; height:100%; display:block; filter: drop-shadow(0 12px 30px rgba(0,0,0,.55)); }
-  .pointer { position:absolute; left:50%; top:-10px; transform:translateX(-50%); width:0; height:0;
-    border-left:22px solid transparent; border-right:22px solid transparent; border-top:44px solid var(--gold);
-    filter: drop-shadow(0 3px 4px rgba(0,0,0,.6)); z-index:3; }
-  #ticker { min-height:44px; font-size: clamp(22px, 2.4vw, 36px); font-weight:700; color: var(--gold); text-shadow:0 2px 6px rgba(0,0,0,.6); }
-  #spin { background: linear-gradient(#e24b3b, #b33224); color:#fff; border:3px solid var(--gold); font-size: clamp(22px,2.4vw,34px); font-weight:700;
-    padding: 12px 56px; border-radius: 999px; cursor:pointer; letter-spacing:3px; box-shadow:0 6px 0 #7e2117, 0 10px 24px rgba(0,0,0,.5); }
-  #spin:disabled { filter: grayscale(.85) brightness(.7); cursor:not-allowed; }
-  #spin:not(:disabled):active { transform: translateY(3px); box-shadow:0 3px 0 #7e2117; }
-  #hint { margin:0; min-height:26px; color: var(--mist); font-size:20px; text-align:center; }
-  .side { background: rgba(31,52,41,.75); border:1px solid rgba(232,184,74,.35); border-radius:20px; padding:20px; display:flex; flex-direction:column; min-height:0; }
-  .side h2 { margin:0 0 12px; font-size:26px; }
-  .side h2 small { color: var(--gold); font-size:20px; margin-left:8px; }
-  #winners { list-style:none; margin:0; padding:0; overflow:auto; display:flex; flex-direction:column; gap:10px; }
-  #winners li { display:flex; align-items:center; gap:12px; background: rgba(255,255,255,.06); border-radius:14px; padding:8px 12px; }
-  #winners li.ultimate { background: linear-gradient(90deg, rgba(232,184,74,.35), rgba(255,255,255,.06)); border:1px solid var(--gold); }
-  #winners .place { font-weight:700; color: var(--gold); min-width:34px; font-size:20px; }
-  #winners img, #winners .ph { width:44px; height:44px; border-radius:50%; object-fit:cover; background:#3a5a49; flex:none; }
-  #winners .who { display:flex; flex-direction:column; min-width:0; }
-  #winners .nm { font-size:20px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  #winners .pz { font-size:15px; color: var(--mist); }
-  #winners li.ultimate .pz { color: var(--gold); }
-  .empty { color: var(--mist); font-size:18px; }
+  body { background:#14231C; overflow:hidden; color:var(--ink);
+    font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',system-ui,sans-serif; }
+  #stage { position:absolute; left:50%; top:50%; width:1672px; height:941px; transform-origin:0 0;
+    background:url(/wheel-assets/bg.jpg) 0 0/100% 100% no-repeat; }
+  #stage > * { position:absolute; }
+  #wheel { left:300px; top:106px; width:640px; height:640px; }
+  #front { left:0; top:0; width:1672px; height:941px; pointer-events:none; }
+  .t { transform:translate(-50%,-50%); white-space:nowrap; text-align:center; font-weight:800; }
+  #title { left:690px; top:103px; font-size:38px; }
+  #sub { left:985px; top:103px; font-size:30px; color:var(--red); }
+  #entrants { left:1445px; top:129px; font-size:24px; }
+  #badge { left:150px; top:170px; background:var(--gold); color:#14231C; font-size:22px; padding:4px 18px; border-radius:999px; border:2px solid #7a4a0a; }
+  #ticker { left:620px; top:718px; font-size:26px; max-width:330px; overflow:hidden; text-overflow:ellipsis; }
+  #spin { left:441px; top:768px; width:360px; height:91px; border:0; border-radius:46px; background:transparent; color:#fff;
+    font:800 42px 'Noto Sans SC','Microsoft YaHei',sans-serif; letter-spacing:4px; text-shadow:0 3px 0 #7e1a12, 0 0 8px rgba(0,0,0,.35); cursor:pointer; }
+  #spin:not(:disabled):hover { background:rgba(255,255,255,.12); }
+  #spin:not(:disabled):active { transform:translateY(3px); }
+  #spin:disabled { cursor:not-allowed; background:rgba(40,30,30,.45); color:#e6d8d0; }
+  #hint { left:620px; top:884px; font-size:24px; color:var(--red); text-shadow:0 0 6px #fff, 0 0 6px #fff; font-weight:700; }
+  #count { left:1240px; top:200px; }
+  #rows { left:0; top:0; }
+  .row { position:absolute; left:1028px; width:420px; height:57px; border-radius:11px; background:#FEECC8;
+    border:2px solid #FA8C28; box-shadow:0 0 0 2px #2D0505; }
+  .row > * { position:absolute; top:50%; transform:translateY(-50%); }
+  .row .crown { left:10px; height:45px; }
+  .row .num { left:0; width:88px; text-align:center; font-size:30px; font-weight:800; color:#965F46; }
+  .row .snow { right:6px; height:40px; opacity:.9; }
+  .row .av { left:90px; width:51px; height:51px; border-radius:50%; object-fit:cover; background:#c9a97f; border:2px solid #EBAA28; box-shadow:0 0 0 3px #784609; }
+  .row .ph { left:91px; width:49px; height:49px; border-radius:50%; border:3px solid #CDA58C; }
+  .row .nm { left:158px; width:205px; font-size:27px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row.empty .nm { color:#BE9682; font-size:24px; font-weight:700; }
+  .row.ult { background:#FFE39A; }
 
-  .overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(8,16,12,.72); z-index:20; transition:opacity .25s; }
+  .overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(40,12,8,.62); z-index:20; transition:opacity .25s; }
   .overlay.hidden { opacity:0; pointer-events:none; }
-  .card { text-align:center; background: var(--pine2); border:3px solid var(--gold); border-radius:28px; padding:36px 64px; min-width: 460px; max-width: 80vw; box-shadow:0 20px 60px rgba(0,0,0,.6); }
-  .card img, .card .ph { width:160px; height:160px; border-radius:50%; border:5px solid var(--gold); object-fit:cover; background:#3a5a49; margin:0 auto 16px; display:block; }
-  #ov-title { font-size:28px; color: var(--gold); font-weight:700; letter-spacing:3px; }
-  #ov-name { font-size: clamp(36px,4.4vw,64px); font-weight:800; margin:8px 0; word-break:break-all; }
-  #ov-sub { font-size:24px; color: var(--mist); min-height:32px; }
-  #ov-sub b { color:#fff; }
+  .card { text-align:center; background:var(--cream); border:6px solid var(--red); box-shadow:0 0 0 4px var(--gold), 0 20px 60px rgba(0,0,0,.6);
+    border-radius:28px; padding:34px 64px; min-width:460px; max-width:80vw; }
+  .card img, .card .ph { width:160px; height:160px; border-radius:50%; border:5px solid var(--gold); object-fit:cover; background:#c9a97f; margin:0 auto 14px; display:block; }
+  #ov-title { font-size:28px; color:var(--red); font-weight:800; letter-spacing:3px; }
+  #ov-name { font-size:clamp(36px,4.4vw,64px); font-weight:800; margin:8px 0; word-break:break-all; }
+  #ov-sub { font-size:24px; min-height:32px; }
+  #ov-sub b { color:var(--red); }
   #confetti { position:fixed; inset:0; pointer-events:none; z-index:30; }
-  .gone { text-align:center; padding:80px 24px; font-size:28px; }
+  .gone { text-align:center; padding:80px 24px; font-size:28px; color:#fff; }
 </style>
 </head>
 <body>
-<header>
-  <h1>🎄 圣诞厨房寻宝季 · 幸运转盘</h1>
-  <span id="badge" hidden>预演模式</span>
-</header>
-<main id="app">
-  <section class="stage">
-    <div class="wheelwrap">
-      <canvas id="wheel" width="1000" height="1000"></canvas>
-      <div class="pointer"></div>
-    </div>
-    <div id="ticker">&nbsp;</div>
-    <button id="spin" disabled>🎡 转！</button>
-    <p id="hint"></p>
-  </section>
-  <aside class="side">
-    <h2>得奖名单<small id="count"></small></h2>
-    <ol id="winners"></ol>
-  </aside>
-</main>
+<div id="stage">
+  <canvas id="wheel" width="1280" height="1280"></canvas>
+  <img id="front" src="/wheel-assets/front.png" alt="">
+  <div id="title" class="t">圣诞幸运转盘</div>
+  <div id="sub" class="t">厨房机密处</div>
+  <div id="entrants" class="t"></div>
+  <div id="badge" class="t" hidden>预演模式</div>
+  <div id="ticker" class="t">&nbsp;</div>
+  <button id="spin" disabled>开始转动</button>
+  <div id="hint" class="t"></div>
+  <div id="rows"></div>
+</div>
 
 <div id="overlay" class="overlay hidden">
   <div class="card">
@@ -92,8 +83,9 @@
 const token = new URLSearchParams(location.search).get('s') || '';
 const $ = (id) => document.getElementById(id);
 const canvas = $('wheel'), ctx = canvas.getContext('2d');
+const CX = 620, CY = 426;
 const TAU = Math.PI * 2;
-const COLORS = ['#B5372A','#1F7A4D','#D9A62E','#2C6FA3','#7A4DA3','#D9702E','#18907C','#8F2D3C'];
+const COLORS = ['#00966E','#C81E28','#F08214','#FAC814','#8232A0','#1E64C8','#5AAA28','#821432'];
 
 let state = null;
 let rot = 0;
@@ -107,52 +99,49 @@ async function api(path, opts) {
   return r.json();
 }
 
-/* ---------- 转盘绘制 ---------- */
+/* ---------- 转盘绘制（画布 1280px = 页面 640px，半径 286） ---------- */
+const WR = 572;
 function drawWheel(rotation) {
-  const W = canvas.width, cx = W / 2, cy = W / 2, R = W / 2 - 14;
+  const W = canvas.width, cx = W / 2, cy = W / 2, R = WR;
   ctx.clearRect(0, 0, W, W);
   const list = state ? state.participants : [];
   const total = list.reduce((s, p) => s + p.tickets, 0);
 
-  // 外圈
-  ctx.beginPath(); ctx.arc(cx, cy, R + 10, 0, TAU); ctx.fillStyle = '#E8B84A'; ctx.fill();
-  ctx.beginPath(); ctx.arc(cx, cy, R + 2, 0, TAU); ctx.fillStyle = '#14231C'; ctx.fill();
-
   if (!total) {
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fillStyle = '#1F3429'; ctx.fill();
-    return;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fillStyle = '#F6E3BD'; ctx.fill();
+  } else {
+    let a = rotation;
+    list.forEach((p, i) => {
+      const ang = (p.tickets / total) * TAU;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a, a + ang); ctx.closePath();
+      ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
+      if (list.length > 1) { ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.stroke(); }
+      if (ang > 0.09) {
+        ctx.save();
+        ctx.translate(cx, cy); ctx.rotate(a + ang / 2);
+        if (Math.cos(a + ang / 2) < 0) ctx.rotate(Math.PI);
+        const size = Math.max(22, Math.min(52, R * ang * 0.42));
+        ctx.font = `800 ${size}px 'Noto Sans SC','Microsoft YaHei',sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        let t = p.name; const maxW = R * 0.5;
+        while (t.length > 1 && ctx.measureText(t).width > maxW) t = t.slice(0, -1);
+        if (t !== p.name) t += '…';
+        ctx.lineJoin = 'round'; ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(60,20,20,.85)';
+        const tx = (Math.cos(a + ang / 2) < 0 ? -1 : 1) * R * 0.62;
+        ctx.strokeText(t, tx, 0); ctx.fillStyle = '#fff'; ctx.fillText(t, tx, 0);
+        ctx.restore();
+      }
+      a += ang;
+    });
   }
-
-  let a = rotation;
-  list.forEach((p, i) => {
-    const ang = (p.tickets / total) * TAU;
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a, a + ang); ctx.closePath();
-    ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.stroke();
-
-    // 扇形够宽才写名字
-    if (ang > 0.1) {
-      ctx.save();
-      ctx.translate(cx, cy); ctx.rotate(a + ang / 2);
-      const size = Math.max(14, Math.min(34, R * ang * 0.5));
-      ctx.font = `bold ${size}px 'Noto Sans SC','Microsoft YaHei',sans-serif`;
-      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-      let t = p.name;
-      const maxW = R * 0.7;
-      while (t.length > 1 && ctx.measureText(t).width > maxW) t = t.slice(0, -1);
-      if (t !== p.name) t += '…';
-      ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 4;
-      ctx.fillText(t, R - 22, 0);
-      ctx.restore();
-    }
-    a += ang;
-  });
-
-  // 中心圆
-  ctx.beginPath(); ctx.arc(cx, cy, R * 0.13, 0, TAU); ctx.fillStyle = '#E8B84A'; ctx.fill();
-  ctx.beginPath(); ctx.arc(cx, cy, R * 0.1, 0, TAU); ctx.fillStyle = '#14231C'; ctx.fill();
-  ctx.font = `${R * 0.1}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#fff'; ctx.fillText('🎄', cx, cy + 2);
+  // 金色外圈
+  ctx.beginPath(); ctx.arc(cx, cy, R - 14, 0, TAU); ctx.lineWidth = 28; ctx.strokeStyle = '#EBAA28'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, R + 3, 0, TAU); ctx.lineWidth = 6; ctx.strokeStyle = '#784609'; ctx.stroke();
+  // 中心
+  ctx.beginPath(); ctx.arc(cx, cy, 96, 0, TAU); ctx.fillStyle = '#1E1414'; ctx.fill();
+  ctx.lineWidth = 16; ctx.strokeStyle = '#EBAA28'; ctx.stroke();
+  ctx.font = "800 88px 'Noto Sans SC','Microsoft YaHei',sans-serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#FFE27A'; ctx.fillText('抽', cx, cy + 4);
 }
 
 function nameUnderPointer(rotation) {
@@ -217,7 +206,7 @@ async function refresh() {
   let s;
   try { s = await api('/api/state'); } catch (e) { return; }
   if (!s.ok) {
-    document.body.innerHTML = '<div class="gone">🎄 这个转盘链接已经失效。<br>请回到 Discord，重新执行 /draw-christmas 获取新链接。</div>';
+    document.body.style.background='#14231C'; document.body.innerHTML = '<div class="gone">🎄 这个转盘链接已经失效。<br>请回到 Discord，重新执行 /draw-christmas 获取新链接。</div>';
     clearInterval(timer);
     return;
   }
@@ -231,35 +220,51 @@ function avatarHtml(url, cls) {
 }
 function esc(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+const ROW0 = 238, PITCH = 62.1, ROWH = 57;
+function rowHtml(i, w) {
+  const top = Math.round(ROW0 + PITCH * (i + 0.5) - ROWH / 2);
+  if (!w) return `<div class="row empty" style="top:${top}px"><span class="num">${i + 1 + OFFSET}</span><div class="ph"></div><span class="nm">待抽取</span></div>`;
+  const lead = w.place <= 3 ? `<img class="crown" src="/wheel-assets/crown${w.place}.png" alt="">` : `<span class="num">${w.place}</span>`;
+  const ult = w.prize === 'ULTIMATE';
+  return `<div class="row ${ult ? 'ult' : ''}" style="top:${top}px">${lead}${w.avatarUrl ? `<img class="av" src="${w.avatarUrl}" alt="">` : '<div class="av"></div>'}<span class="nm">${ult ? '🌟' : ''}${esc(w.name)}</span><img class="snow" src="/wheel-assets/snow.png" alt=""></div>`;
+}
+let OFFSET = 0;
+function layout() {
+  const s = Math.min(innerWidth / 1672, innerHeight / 941);
+  $('stage').style.transform = `scale(${s}) translate(-836px,-470.5px)`;
+}
+
 function render() {
   $('badge').hidden = state.mode !== 'test';
-  $('count').textContent = `${state.winners.length} / ${state.target}`;
+  $('entrants').textContent = `入场 ${state.participants.length} 人`;
 
-  const ol = $('winners');
-  ol.innerHTML = state.winners.length
-    ? state.winners.map((w) => {
-        const ult = w.prize === 'ULTIMATE';
-        return `<li class="${ult ? 'ultimate' : ''}"><span class="place">#${w.place}</span>${avatarHtml(w.avatarUrl)}<div class="who"><span class="nm">${esc(w.name)}</span><span class="pz">${ult ? '🌟 主厨豪华至尊大礼' : '🎁 圣诞神秘盲盒'}</span></div></li>`;
-      }).join('')
-    : '<li class="empty">还没有人，点「转」开始吧</li>';
+  const ws = state.winners;
+  OFFSET = Math.max(0, ws.length - 10);
+  const rows = [];
+  for (let i = 0; i < 10; i++) {
+    const w = ws[OFFSET + i];
+    rows.push(rowHtml(i, w));
+  }
+  $('rows').innerHTML = rows.join('');
 
-  const btn = $('spin');
-  const hint = $('hint');
+  const btn = $('spin'), hint = $('hint');
+  const next = ws.length + 1;
   if (state.status === 'idle') {
-    btn.disabled = spinning;
-    btn.textContent = `🎡 转！（抽第 ${state.winners.length + 1} 位）`;
-    hint.textContent = state.upgraded && state.winners.length < state.upgradeTop ? '🌟 这一位将获得「主厨豪华至尊大礼」！' : '';
+    btn.disabled = spinning; btn.textContent = '开始转动';
+    if (!spinning) $('ticker').textContent = `现在抽取：第 ${next} 位`;
+    hint.textContent = state.upgraded && ws.length < state.upgradeTop ? '🌟 这一位将获得「主厨豪华至尊大礼」！' : '';
   } else if (state.status === 'done') {
-    btn.disabled = true; btn.textContent = '🎉 开奖完成';
-    hint.textContent = state.winners.length < state.target ? `有 ${state.target - state.winners.length} 个名额因无人在场而空缺` : '恭喜以上所有幸运伙伴！';
+    btn.disabled = true; btn.textContent = '开奖完成';
+    $('ticker').textContent = `共 ${ws.length} 位得奖`;
+    hint.textContent = ws.length < state.target ? `有 ${state.target - ws.length} 个名额因无人在场而空缺` : '恭喜以上所有幸运伙伴！';
   } else {
-    btn.disabled = true; btn.textContent = '🎡 转动中…';
+    btn.disabled = true; btn.textContent = '转动中…';
+    if (!spinning) $('ticker').textContent = `第 ${next} 位 确认中`;
     hint.textContent = '';
   }
 
-  if (!spinning) { drawWheel(rot); if (state.status !== 'idle') {} else $('ticker').innerHTML = '&nbsp;'; }
+  if (!spinning) drawWheel(rot);
 
-  // 提示层：转盘停下后显示「抽到了谁」；之后显示结果
   if (!spinning) {
     if (state.status === 'waiting' && state.current) {
       showPick();
@@ -325,6 +330,7 @@ function tickConfetti() {
 }
 
 $('spin').addEventListener('click', doSpin);
+addEventListener('resize', layout); layout();
 const timer = setInterval(() => { if (!spinning) refresh(); }, 1000);
 refresh();
 </script>

@@ -16,9 +16,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const hoursText = (sec) => (sec / 3600).toFixed(1);
 
 // 进度百分比（保留 1 位小数，最多 100%）
+function pctNum(value, max) {
+  return Math.min(100, Math.floor((value / max) * 1000) / 10);
+}
+// 显示成「50.5/100%」
 function pctOf(value, max) {
-  const n = Math.min(100, Math.floor((value / max) * 1000) / 10);
-  return `${n}%`;
+  return `${pctNum(value, max)}/100%`;
 }
 
 // 文字进度条：pct 是 0-100
@@ -59,8 +62,8 @@ async function cmdMyTickets(interaction) {
     const nd = nextTier(cfg.STREAK_DAY_TIERS, s.validDays);
     progress = [
       nd ? `• 有效打卡日：**${s.validDays}** 天，下一档 ${nd} 天` : `• 有效打卡日：**${s.validDays}** 天（已满档）`,
-      `• 有效语音：**${pctOf(s.voiceSeconds, cfg.VOICE_HOUR_TIERS[cfg.VOICE_HOUR_TIERS.length - 1] * 3600)}**/100`,
-      `• 有效聊天：**${pctOf(s.validMessages, cfg.TOTAL_MESSAGE_TIERS[cfg.TOTAL_MESSAGE_TIERS.length - 1])}**/100`,
+      `• 有效语音：${pctOf(s.voiceSeconds, cfg.VOICE_HOUR_TIERS[cfg.VOICE_HOUR_TIERS.length - 1] * 3600)}`,
+      `• 有效聊天：${pctOf(s.validMessages, cfg.TOTAL_MESSAGE_TIERS[cfg.TOTAL_MESSAGE_TIERS.length - 1])}`,
       `• 有效拉新：**${Math.min(s.verifiedInvites, cfg.MAX_INVITE_TICKETS)}/${cfg.MAX_INVITE_TICKETS}** 位`,
     ].join('\n');
   }
@@ -97,8 +100,8 @@ async function cmdMyTickets(interaction) {
       rows: s.unlockedEntry
         ? [
             nd ? `${s.validDays}/${nd} 天` : `${s.validDays} 天（满档）`,
-            `${pctOf(s.voiceSeconds, cfg.VOICE_HOUR_TIERS[cfg.VOICE_HOUR_TIERS.length - 1] * 3600)}/100`,
-            `${pctOf(s.validMessages, cfg.TOTAL_MESSAGE_TIERS[cfg.TOTAL_MESSAGE_TIERS.length - 1])}/100`,
+            `${pctOf(s.voiceSeconds, cfg.VOICE_HOUR_TIERS[cfg.VOICE_HOUR_TIERS.length - 1] * 3600)}`,
+            `${pctOf(s.validMessages, cfg.TOTAL_MESSAGE_TIERS[cfg.TOTAL_MESSAGE_TIERS.length - 1])}`,
             `${Math.min(s.verifiedInvites, cfg.MAX_INVITE_TICKETS)}/${cfg.MAX_INVITE_TICKETS} 位`,
           ]
         : null,

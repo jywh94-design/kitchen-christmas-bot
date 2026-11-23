@@ -6,6 +6,8 @@ const { getSession, sessionState, spin } = require('./draw');
 
 const PAGE_PATH = path.join(__dirname, '..', 'web', 'wheel.html');
 
+const ASSET_DIR = path.join(__dirname, '..', 'web', 'assets');
+
 function send(res, status, body, type) {
   res.writeHead(status, {
     'Content-Type': type,
@@ -24,6 +26,15 @@ function startWebServer() {
 
       if (url.pathname === '/' || url.pathname === '/health') {
         return send(res, 200, 'ok', 'text/plain; charset=utf-8');
+      }
+      if (url.pathname.startsWith('/wheel-assets/')) {
+        const name = path.basename(url.pathname);
+        const types = { '.jpg': 'image/jpeg', '.png': 'image/png' };
+        const type = types[path.extname(name)];
+        const file = path.join(ASSET_DIR, name);
+        if (!type || !fs.existsSync(file)) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
+        res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=3600' });
+        return res.end(fs.readFileSync(file));
       }
       if (url.pathname === '/wheel') {
         return send(res, 200, fs.readFileSync(PAGE_PATH), 'text/html; charset=utf-8');
