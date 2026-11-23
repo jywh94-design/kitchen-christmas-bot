@@ -13,24 +13,23 @@ const MUTED = 'rgba(74,29,18,0.45)';
 
 // ---- 版面坐标 ----
 const L = {
-  avatar: { x: 126, y: 211, size: 347 }, // 头像先画成方形，再用 avatar-mask.png 裁成圆框的形状
-  greeting: { x: 677, y: 192, size: 32, maxW: 690, nameMaxW: 300 },
+  avatar: { x: 148, y: 227, size: 323 }, // 头像先画成方形，再用 avatar-mask.png 裁成圆形
+  greeting: { x: 645, y: 210, size: 31, maxW: 660, nameMaxW: 300 },
   cards: [
-    { cx: 748, cy: 313, size: 50, color: RED }, // 当前总幸运签
-    { cx: 1107, cy: 313, size: 46, color: INK }, // 日常签
-    { cx: 1408, cy: 313, size: 46, color: INK }, // 拉新签
+    { cx: 700, cy: 322, size: 48, color: RED }, // 当前总幸运签
+    { cx: 1013, cy: 322, size: 46, color: INK }, // 日常签
+    { cx: 1311, cy: 322, size: 46, color: INK }, // 拉新签
   ],
-  bar: { sx: 810, sy: 360, innerLeft: 838, innerW: 494 }, // 进度条素材左上角、绿色区域起点和宽度
-  pct: { cx: 1409, cy: 394, size: 34 },
-  check: { x: 1478, y: 361 },
-  rowsY: [523, 563, 603, 642],
-  rowsX: 810,
-  rowsSize: 27,
-  rowsMaxW: 165,
-  pillLeft: 800,
-  pillHalfH: 17,
-  tip: { x: 1103, y: 548, lineH: 40, size: 28, maxW: 320, maxLines: 3 },
-  footer: { cx: 1042, cy: 722, size: 28, maxW: 640 },
+  bar: { sx: 803, sy: 381, innerLeft: 805, innerW: 449 }, // 进度条素材左上角、填充区起点和宽度
+  pct: { cx: 1326, cy: 401, size: 36 },
+  check: { x: 1386, y: 381 },
+  rowsY: [518, 554, 590, 626],
+  pillLeft: [758, 742, 742, 742], // 每行底色块的左边（标签文字后面）
+  rowsSize: 25,
+  rowsMaxW: 190,
+  pillHalfH: 16,
+  tip: { x: 1042, y: 520, lineH: 38, size: 27, maxW: 270, maxLines: 4 },
+  footer: { cx: 975, cy: 703, size: 28, maxW: 680 },
 };
 const PILL_DAYS = { fill: 'rgb(252,205,195)', text: 'rgb(150,40,35)' };
 const PILL_OTHER = { fill: 'rgb(190,232,150)', text: INK };
@@ -214,10 +213,11 @@ async function renderTicketImage(v) {
       setFont(ctx, L.rowsSize);
       const shown = fit(ctx, v.rows[i], L.rowsMaxW);
       const w = ctx.measureText(shown).width;
-      pill(ctx, L.pillLeft, y - L.pillHalfH, L.rowsX - L.pillLeft + w + 18, L.pillHalfH * 2, style.fill);
-      text(ctx, shown, L.rowsX, y, L.rowsSize, style.text);
+      const left = L.pillLeft[i];
+      pill(ctx, left, y - L.pillHalfH, w + 24, L.pillHalfH * 2, style.fill);
+      text(ctx, shown, left + 12, y, L.rowsSize, style.text);
     } else {
-      text(ctx, '入场后解锁', L.rowsX - 5, y, 25, MUTED, 'left', L.rowsMaxW);
+      text(ctx, '入场后解锁', L.pillLeft[i] + 4, y, 24, MUTED, 'left', L.rowsMaxW);
     }
   }
 
