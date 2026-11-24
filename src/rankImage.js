@@ -9,16 +9,17 @@ const FAMILY = 'KitchenSans';
 // 头像位置和形状来自 assets/rank/slots.json（9 个圆）和 assets/rank/mask.png（把头像裁进圆圈）
 // 前三名名字栏里名字与签数的位置：
 const PODIUM = [
-  { plateX: 479, nameY: 570, nameSize: 28, maxW: 190, ticketY: 601 }, // 第 1 名
-  { plateX: 182, nameY: 570, nameSize: 26, maxW: 150, ticketY: 600 }, // 第 2 名
-  { plateX: 770, nameY: 570, nameSize: 26, maxW: 150, ticketY: 600 }, // 第 3 名
+  { plateX: 488, nameY: 566, size: 28, maxW: 160, ticketY: 626 }, // 第 1 名
+  { plateX: 187, nameY: 567, size: 26, maxW: 104, ticketY: 619 }, // 第 2 名
+  { plateX: 767, nameY: 567, size: 26, maxW: 108, ticketY: 619 }, // 第 3 名
 ];
-// 第 4-9 名：6 行
-const ROW = { nameX: 1135, nameMaxW: 185, ticketRightX: 1395, size: 31 };
+// 第 4-9 名：6 行；名字在奶油色条里，签数在右边红色区
+const ROW = { nameX: 1163, nameMaxW: 235, ticketCx: 1510, size: 31, ticketSize: 30 };
 
 const INK = '#4A1D12';      // 名字：深棕
 const RED = '#B3261E';      // 签数：圣诞红
 const MUTED = 'rgba(74,29,18,0.4)';
+const CREAM = '#FFF1D6';
 
 let fontReady = false;
 function ensureFont() {
@@ -115,22 +116,40 @@ async function renderRankImage(entries) {
   for (let i = 0; i < 9 && i < entries.length; i++) {
     await drawAvatarSquare(lctx, entries[i].avatar, SLOTS[i], cleanName(entries[i].name));
   }
-  // 人数不足 9 位时，空位用奶油色盖住模板里的绿色，不会露出绿圈
-  for (let i = entries.length; i < 9; i++) {
-    const sl = SLOTS[i];
-    lctx.fillStyle = '#F3E1BE';
-    lctx.fillRect(sl.cx - sl.R, sl.cy - sl.R, sl.R * 2, sl.R * 2);
-  }
   lctx.globalCompositeOperation = 'destination-in';
   lctx.drawImage(mask, 0, 0);
   ctx.drawImage(layer, 0, 0);
 
-  // 2) 前三名：名字和签数
+  // 2) 前三名：名字写在名牌里（自动缩小到放得下），签数放在名牌下面的小红牌里
   for (let i = 0; i < PODIUM.length && i < entries.length; i++) {
     const p = PODIUM[i];
     const e = entries[i];
-    drawText(ctx, cleanName(e.name), p.plateX, p.nameY, p.nameSize, INK, 'center', p.maxW);
-    drawText(ctx, `${e.tickets} 签`, p.plateX, p.ticketY, 22, RED, 'center');
+    const name = cleanName(e.name);
+    let size = p.size;
+    ctx.font = `bold ${size}px ${FAMILY}`;
+    while (size > 18 && ctx.measureText(name).width > p.maxW) {
+      size -= 1;
+      ctx.font = `bold ${size}px ${FAMILY}`;
+    }
+    drawText(ctx, name, p.plateX, p.nameY, size, INK, 'center', p.maxW);
+    const label = `${e.tickets} 签`;
+    ctx.font = `bold 22px ${FAMILY}`;
+    const w = ctx.measureText(label).width + 30;
+    const x0 = p.plateX - w / 2;
+    const y0 = p.ticketY - 15;
+    ctx.beginPath();
+    ctx.moveTo(x0 + 15, y0);
+    ctx.lineTo(x0 + w - 15, y0);
+    ctx.arc(x0 + w - 15, y0 + 15, 15, -Math.PI / 2, Math.PI / 2);
+    ctx.lineTo(x0 + 15, y0 + 30);
+    ctx.arc(x0 + 15, y0 + 15, 15, Math.PI / 2, (Math.PI * 3) / 2);
+    ctx.closePath();
+    ctx.fillStyle = RED;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = CREAM;
+    ctx.stroke();
+    drawText(ctx, label, p.plateX, p.ticketY + 1, 22, CREAM, 'center');
   }
 
   // 3) 第 4-9 名
@@ -142,7 +161,7 @@ async function renderRankImage(entries) {
       continue;
     }
     drawText(ctx, cleanName(e.name), ROW.nameX, cy, ROW.size, INK, 'left', ROW.nameMaxW);
-    drawText(ctx, `${e.tickets} 签`, ROW.ticketRightX, cy, ROW.size, RED, 'right');
+    drawText(ctx, `${e.tickets} 签`, ROW.ticketCx, cy, ROW.ticketSize, CREAM, 'center');
   }
 
   return canvas.toBuffer('image/png');

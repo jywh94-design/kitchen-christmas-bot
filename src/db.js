@@ -89,7 +89,7 @@ function getMYDateString() {
 function getEventWindow() {
   return {
     start: new Date(process.env.EVENT_START_ISO || '2026-12-01T00:00:00+08:00').getTime(),
-    end: new Date(process.env.EVENT_END_ISO || '2026-12-23T23:59:59+08:00').getTime(),
+    end: new Date(process.env.EVENT_END_ISO || '2026-12-24T19:59:59+08:00').getTime(),
   };
 }
 

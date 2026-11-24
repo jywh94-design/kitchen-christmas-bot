@@ -16,7 +16,7 @@ function buildCommands() {
 
     new SlashCommandBuilder()
       .setName('draw-christmas')
-      .setDescription('🎄 【管理员】现场直播开奖（12月23日 23:59 之后才能正式开奖）')
+      .setDescription('🎄 【管理员】现场直播开奖（12月24日 20:00 之后才能正式开奖）')
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
       .addBooleanOption((o) =>
         o

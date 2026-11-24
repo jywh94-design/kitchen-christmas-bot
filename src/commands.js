@@ -84,7 +84,7 @@ async function cmdMyTickets(interaction) {
 
   const footer = cfg.TEST_FAST
     ? '快速测试模式已开启，门槛已放宽，仅用于实测'
-    : '统计 12月1日-12月23日 | 闭麦挂机与水贴不计入';
+    : '统计 12月1日-12月24日 | 闭麦挂机与水贴不计入';
 
   // 优先发图片卡片；出图失败就退回文字卡片，保证一定有回复
   try {
@@ -134,7 +134,7 @@ async function cmdMyTickets(interaction) {
     .setFooter({
       text: cfg.TEST_FAST
         ? '⚠️ 快速测试模式已开启，门槛已放宽，仅用于实测'
-        : '统计周期：12月1日 - 12月23日 | 闭麦挂机与水贴不计入统计',
+        : '统计周期：12月1日 - 12月24日 | 闭麦挂机与水贴不计入统计',
     });
 
   return interaction.editReply({ embeds: [embed] });
@@ -167,7 +167,7 @@ async function cmdHelpEvent(interaction) {
     .setColor(0x2ecc71)
     .setTitle('🎄 圣诞厨房寻宝季 · 活动规则')
     .setDescription(
-      `**12月1日 — 12月23日**，常回厨房开麦、聊天或带朋友入伙，就能自动攒幸运签，圣诞夜直播抽奖，最多抽出 **${cfg.CHRISTMAS_WINNERS_COUNT} 份**礼物。`
+      `**12月1日 — 12月24日**，常回厨房开麦、聊天或带朋友入伙，就能自动攒幸运签，圣诞夜直播抽奖，最多抽出 **${cfg.CHRISTMAS_WINNERS_COUNT} 份**礼物。`
     )
     .addFields(
       {
@@ -228,7 +228,7 @@ async function cmdDraw(interaction) {
   if (!testMode) {
     if (Date.now() <= getEventWindow().end) {
       return interaction.reply({
-        content: '⏳ 统计还没截止，12月23日 23:59 之后才能正式开奖。想先预演，请把 `test` 选项选 True。',
+        content: '⏳ 统计还没截止，12月24日 20:00 之后才能正式开奖。想先预演，请把 `test` 选项选 True。',
         flags: EPHEMERAL,
       });
     }
