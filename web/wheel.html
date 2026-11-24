@@ -185,7 +185,7 @@ function drawWheel(rotation) {
       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a, a + ang); ctx.closePath();
       ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
       if (list.length > 1) { ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.stroke(); }
-      if (ang > 0.09) {
+      if (ang > 0.09 && !spinning) {   // 转动时隐藏名字，保持神秘感
         ctx.save();
         ctx.translate(cx, cy); ctx.rotate(a + ang / 2);
         if (Math.cos(a + ang / 2) < 0) ctx.rotate(Math.PI);
@@ -233,7 +233,7 @@ function animateTo(endRot, ms) {
       const t = Math.min(1, (now - t0) / ms);
       rot = startRot + (endRot - startRot) * ease(t);
       drawWheel(rot);
-      $('ticker').textContent = nameUnderPointer(rot);
+      $('ticker').textContent = '抽取中…';
       if (t < 1) requestAnimationFrame(frame); else resolve();
     }
     requestAnimationFrame(frame);

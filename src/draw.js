@@ -159,8 +159,12 @@ async function createSession({ guild, channel, voiceChannel, testMode }) {
 
   const candidates = participants
     .filter((p) => !winnerIds.has(p.userId))
-    .sort((a, b) => b.totalTickets - a.totalTickets || (a.userId < b.userId ? -1 : 1))
     .map((p) => ({ userId: p.userId, tickets: p.totalTickets }));
+  // 转盘上的排列随机打乱（只打乱一次，之后保持稳定；抽中谁只看签数，和排列无关）
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
 
   const info = await resolveMembers(guild, participants.map((p) => p.userId));
 
