@@ -48,25 +48,13 @@ function closeSession(session) {
   sessions.delete(session.token);
 }
 
-// ---------- 前 3 名的抽奖顺序：desc = 先抽第 3 名、最后抽第 1 名；asc = 先抽第 1 名 ----------
-function topCount(target) {
-  return Math.min(3, target);
-}
-// 没有需要选择的情况（名额不足 2 位、前几名已抽完）就直接定下来
-function initialOrderMode(winners, target) {
-  const top = topCount(target);
-  if (top < 2) return 'asc';
-  const done = winners.filter((w) => w.place <= top).length;
-  if (done >= top) return 'asc';
-  if (winners.length === 0) return null;
-  return winners.some((w) => w.place === top) ? 'desc' : 'asc';
+// ---------- 抽奖顺序：固定从最后一名往前抽，最后揭晓第 1 名（不再投票） ----------
+function initialOrderMode() {
+  return 'desc';
 }
 function placeSequence(session) {
-  const top = topCount(session.target);
   const seq = [];
-  if (session.order.mode === 'desc') for (let p = top; p >= 1; p--) seq.push(p);
-  else for (let p = 1; p <= top; p++) seq.push(p);
-  for (let p = top + 1; p <= session.target; p++) seq.push(p);
+  for (let p = session.target; p >= 1; p--) seq.push(p);
   return seq;
 }
 function nextPlace(session) {

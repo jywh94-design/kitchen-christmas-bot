@@ -6,7 +6,7 @@ const {
   getEventWindow,
 } = require('./db');
 const { nextTier, entryNeededForMaxWinners } = require('./rules');
-const { createSession, buildResultEmbed, startVote } = require('./draw');
+const { createSession, buildResultEmbed } = require('./draw');
 const { buildReport } = require('./report');
 const { renderTicketImage } = require('./ticketImage');
 const { isExcluded } = require('./excluded');
@@ -285,7 +285,6 @@ async function cmdDraw(interaction) {
     `🎡 **幸运转盘开奖开始！**${testMode ? '（预演）' : ''}本次抽 **${session.target}** 位` +
       (voiceChannel ? `，大家请待在 <#${voiceChannel.id}>！` : '！')
   );
-  await startVote(session); // 前 3 名顺序：已入场的人投票决定
 }
 
 // =====================================================================

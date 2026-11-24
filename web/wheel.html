@@ -135,14 +135,14 @@ const sfx = {};
 function load(name, file) { const a = new Audio('/wheel-assets/' + file); a.preload = 'auto'; sfx[name] = a; return a; }
 load('spin', 'sfx-spin.mp3').loop = true;
 load('win1', 'sfx-win1.mp3'); load('win2', 'sfx-win2.mp3'); load('win3', 'sfx-win3.mp3');
-load('r1', 'sfx-rand1.mp3'); load('r2', 'sfx-rand2.mp3'); load('r3', 'sfx-rand3.mp3');
-const FALLBACK_LEN = { win1: 10.1, win2: 7.5, win3: 8.6, r1: 1.0, r2: 2.4, r3: 4.3 };
+load('r1', 'sfx-rand1.mp3'); load('r2', 'sfx-rand2.mp3'); load('r3', 'sfx-rand3.mp3'); load('r4', 'sfx-helicopter.mp3');
+const FALLBACK_LEN = { win1: 16.3, win2: 7.5, win3: 8.6, r1: 1.0, r2: 2.4, r3: 4.3, r4: 10.1 };
 let lastRand = '';
 function sfxFor(place) {
   if (place === 1) return 'win1';
   if (place === 2) return 'win2';
   if (place === 3) return 'win3';
-  const pool = ['r1', 'r2', 'r3'].filter((n) => n !== lastRand);
+  const pool = ['r1', 'r2', 'r3', 'r4'].filter((n) => n !== lastRand);
   lastRand = pool[Math.floor(Math.random() * pool.length)];
   return lastRand;
 }
@@ -300,20 +300,19 @@ function rowHtml(i, w) {
   return `<div class="row ${ult ? 'ult' : ''}" style="top:${top}px">${lead}${w.avatarUrl ? `<img class="av" src="${w.avatarUrl}" alt="">` : '<div class="av"></div>'}<span class="nm">${ult ? '🌟' : ''}${esc(w.name)}</span><img class="snow" src="/wheel-assets/snow.png" alt=""></div>`;
 }
 
-function topDone() {
-  const top = Math.min(3, state.target);
-  for (let p = 1; p <= top; p++) if (!state.winners.some((w) => w.place === p)) return false;
-  return true;
+// 从第 10 名往前抽：第 4 名及以后可以自动抽，最后 3 名（3→2→1）留给主厨手动转
+function autoPhase() {
+  return !!state && state.nextPlace !== null && state.nextPlace > 3;
 }
 
 function renderControls() {
   $('b-sound').textContent = `🔊 音效：${soundOn ? '开' : '关'}`;
   $('b-sound').className = soundOn ? 'on' : '';
-  const ok = state && topDone();
-  $('b-auto').textContent = `🤖 自动抽剩下：${autoOn ? '开' : '关'}`;
+  const ok = autoPhase();
+  $('b-auto').textContent = `🤖 自动抽到第 4 名：${autoOn ? '开' : '关'}`;
   $('b-auto').className = autoOn ? 'on' : '';
   $('b-auto').style.opacity = ok || autoOn ? 1 : 0.55;
-  $('b-auto').title = ok ? '' : '前 3 名抽完后才会开始自动抽';
+  $('b-auto').title = '第 10 名到第 4 名自动抽，最后 3 名手动转';
 }
 
 function renderOrder() {
@@ -369,8 +368,8 @@ function render() {
 
   if (!spinning) drawWheel(rot);
 
-  // 自动抽剩下的名额：前 3 名抽完、弹窗和音效播完之后，自己接着转
-  if (autoOn && !spinning && state.status === 'idle' && state.order.mode && topDone() && Date.now() > busyUntil + 800) {
+  // 自动抽：第 10 名到第 4 名，弹窗和音效播完之后自己接着转；最后 3 名手动
+  if (autoOn && !spinning && state.status === 'idle' && state.order.mode && autoPhase() && Date.now() > busyUntil + 800) {
     doSpin().then((ok) => {
       if (ok === false && ++autoFails >= 3) { autoOn = false; autoFails = 0; renderControls(); $('hint').textContent = '自动抽遇到问题，已暂停'; }
       if (ok) autoFails = 0;
