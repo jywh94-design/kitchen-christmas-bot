@@ -136,7 +136,7 @@ function load(name, file) { const a = new Audio('/wheel-assets/' + file); a.prel
 load('spin', 'sfx-spin.mp3').loop = true;
 load('win1', 'sfx-win1.mp3'); load('win2', 'sfx-win2.mp3'); load('win3', 'sfx-win3.mp3');
 load('r1', 'sfx-rand1.mp3'); load('r2', 'sfx-rand2.mp3'); load('r3', 'sfx-rand3.mp3'); load('r4', 'sfx-helicopter.mp3');
-const FALLBACK_LEN = { win1: 16.3, win2: 7.5, win3: 8.6, r1: 1.0, r2: 2.4, r3: 4.3, r4: 10.1 };
+const FALLBACK_LEN = { win1: 29.1, win2: 7.5, win3: 8.6, r1: 1.0, r2: 2.4, r3: 4.3, r4: 10.1 };
 let lastRand = '';
 function sfxFor(place) {
   if (place === 1) return 'win1';
@@ -185,7 +185,7 @@ function drawWheel(rotation) {
       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a, a + ang); ctx.closePath();
       ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
       if (list.length > 1) { ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.stroke(); }
-      if (ang > 0.09 && !spinning) {   // 转动时隐藏名字，保持神秘感
+      if (ang > 0.09) {
         ctx.save();
         ctx.translate(cx, cy); ctx.rotate(a + ang / 2);
         if (Math.cos(a + ang / 2) < 0) ctx.rotate(Math.PI);
@@ -233,7 +233,7 @@ function animateTo(endRot, ms) {
       const t = Math.min(1, (now - t0) / ms);
       rot = startRot + (endRot - startRot) * ease(t);
       drawWheel(rot);
-      $('ticker').textContent = '抽取中…';
+      $('ticker').textContent = nameUnderPointer(rot);
       if (t < 1) requestAnimationFrame(frame); else resolve();
     }
     requestAnimationFrame(frame);
@@ -300,19 +300,20 @@ function rowHtml(i, w) {
   return `<div class="row ${ult ? 'ult' : ''}" style="top:${top}px">${lead}${w.avatarUrl ? `<img class="av" src="${w.avatarUrl}" alt="">` : '<div class="av"></div>'}<span class="nm">${ult ? '🌟' : ''}${esc(w.name)}</span><img class="snow" src="/wheel-assets/snow.png" alt=""></div>`;
 }
 
-// 从第 10 名往前抽：第 4 名及以后可以自动抽，最后 3 名（3→2→1）留给主厨手动转
-function autoPhase() {
-  return !!state && state.nextPlace !== null && state.nextPlace > 3;
+function topDone() {
+  const top = Math.min(3, state.target);
+  for (let p = 1; p <= top; p++) if (!state.winners.some((w) => w.place === p)) return false;
+  return true;
 }
 
 function renderControls() {
   $('b-sound').textContent = `🔊 音效：${soundOn ? '开' : '关'}`;
   $('b-sound').className = soundOn ? 'on' : '';
-  const ok = autoPhase();
-  $('b-auto').textContent = `🤖 自动抽到第 4 名：${autoOn ? '开' : '关'}`;
+  const ok = state && topDone();
+  $('b-auto').textContent = `🤖 自动抽剩下：${autoOn ? '开' : '关'}`;
   $('b-auto').className = autoOn ? 'on' : '';
   $('b-auto').style.opacity = ok || autoOn ? 1 : 0.55;
-  $('b-auto').title = '第 10 名到第 4 名自动抽，最后 3 名手动转';
+  $('b-auto').title = ok ? '' : '前 3 名抽完后才会开始自动抽';
 }
 
 function renderOrder() {
@@ -368,8 +369,8 @@ function render() {
 
   if (!spinning) drawWheel(rot);
 
-  // 自动抽：第 10 名到第 4 名，弹窗和音效播完之后自己接着转；最后 3 名手动
-  if (autoOn && !spinning && state.status === 'idle' && state.order.mode && autoPhase() && Date.now() > busyUntil + 800) {
+  // 自动抽剩下的名额：前 3 名抽完、弹窗和音效播完之后，自己接着转
+  if (autoOn && !spinning && state.status === 'idle' && state.order.mode && topDone() && Date.now() > busyUntil + 800) {
     doSpin().then((ok) => {
       if (ok === false && ++autoFails >= 3) { autoOn = false; autoFails = 0; renderControls(); $('hint').textContent = '自动抽遇到问题，已暂停'; }
       if (ok) autoFails = 0;
@@ -429,20 +430,29 @@ function showResult(ev) {
     showOverlay({ avatarUrl: ev.avatarUrl, name: ev.name, title: `第 ${place} 位得奖`, plate, bar: next ? `下一位：第 ${next} 位` : '开奖完成' });
     playSfx(snd);
     let revealAt = 0;
+    const first = place === 1;
     if (top) {
       hiddenPlaces.add(place);
-      setFade($('ov-avin'), len * 0.18, len * 0.32);
-      setFade($('ov-name'), len * 0.42, len * 0.28);
-      setFade($('ov-plate'), len * 0.55, len * 0.25);
-      revealAt = len * 0.42;
+      if (first) {
+        setFade($('ov-avin'), 5000, 900);
+        setFade($('ov-name'), 5400, 800);
+        setFade($('ov-plate'), 5900, 700);
+        revealAt = 5000;
+      } else {
+        setFade($('ov-avin'), len * 0.18, len * 0.32);
+        setFade($('ov-name'), len * 0.42, len * 0.28);
+        setFade($('ov-plate'), len * 0.55, len * 0.25);
+        revealAt = len * 0.42;
+      }
     } else {
       ['ov-avin', 'ov-name', 'ov-plate'].forEach((id) => clearFade($(id)));
     }
     setTimeout(burst, revealAt);
-    const hold = top ? len + 2500 : Math.max(5500, len + 1500);
+    if (first) setTimeout(() => fireworks(8000), revealAt);
+    const hold = first ? 15000 : top ? len + 2500 : Math.max(5500, len + 1500);
     busyUntil = Date.now() + hold;
-    overlayTimer = setTimeout(() => { hideOverlay(); hiddenPlaces.delete(place); if (state) render(); }, hold);
-    if (top) setTimeout(() => { hiddenPlaces.delete(place); if (state && !spinning) render(); }, revealAt + 600);
+    overlayTimer = setTimeout(() => { hideOverlay(); hiddenPlaces.delete(place); if (first) stopSfx(snd, 1500); if (state) render(); }, hold);
+    if (top) setTimeout(() => { hiddenPlaces.delete(place); if (state && !spinning) render(); }, revealAt + 1000);
   } else {
     ['ov-avin', 'ov-name', 'ov-plate'].forEach((id) => clearFade($(id)));
     showOverlay({ avatarUrl: ev.avatarUrl, name: ev.name, title: '⏰ 没有在场', plate: '视为放弃', bar: '重新抽取' });
@@ -464,10 +474,31 @@ function burst() {
   }
   if (!was) requestAnimationFrame(tickConfetti);
 }
+function fireworks(ms) {
+  cf.width = innerWidth; cf.height = innerHeight;
+  const colors = ['#E8B84A', '#FF5A4D', '#5BE08F', '#F6F1E7', '#5AB4FF', '#FF8AD8'];
+  const t0 = performance.now();
+  (function launch() {
+    if (performance.now() - t0 > ms) return;
+    const x = innerWidth * (0.15 + Math.random() * 0.7), y = innerHeight * (0.12 + Math.random() * 0.42);
+    const c = colors[Math.floor(Math.random() * colors.length)], n = 70, was = parts.length;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU, v = 3 + Math.random() * 5;
+      parts.push({ fw: 1, x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, s: 2 + Math.random() * 2.5, c, life: 70 + Math.random() * 30, max: 100 });
+    }
+    if (!was) requestAnimationFrame(tickConfetti);
+    setTimeout(launch, 280 + Math.random() * 380);
+  })();
+}
 function tickConfetti() {
   cctx.clearRect(0, 0, cf.width, cf.height);
   parts = parts.filter((p) => p.life-- > 0);
   for (const p of parts) {
+    if (p.fw) {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.vx *= 0.975; p.vy *= 0.975;
+      cctx.globalAlpha = Math.max(0, Math.min(1, p.life / 45)); cctx.fillStyle = p.c;
+      cctx.beginPath(); cctx.arc(p.x, p.y, p.s, 0, TAU); cctx.fill(); cctx.globalAlpha = 1; continue;
+    }
     p.x += p.vx; p.y += p.vy; p.vy += 0.5; p.vx *= 0.99; p.r += p.vr;
     cctx.save(); cctx.translate(p.x, p.y); cctx.rotate(p.r); cctx.fillStyle = p.c; cctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); cctx.restore();
   }
