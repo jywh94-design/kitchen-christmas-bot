@@ -270,7 +270,7 @@ function animateTo(endRot, ms, easeFn) {
 // 两段的接合处速度都是 0，所以中间没有停顿，也没有突然的跳动，看起来是一段连续的运动。
 async function animateDramatic(endRot, ms) {
   const over = 0.13 + Math.random() * 0.09;   // 滑过头多少（弧度，约 7.5～12.5 度）
-  const back = 1800;                          // 倒回来用多久（毫秒）：越大越慢
+  const back = 2000;                          // 倒回来用多久（毫秒）：越大越慢
   await animateTo(endRot + over, Math.max(1200, ms - back));
   await animateTo(endRot, back, (t) => 0.5 - 0.5 * Math.cos(Math.PI * t));   // 慢起步、慢收尾
 }
