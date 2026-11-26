@@ -266,13 +266,20 @@ function animateTo(endRot, ms, easeFn) {
   });
 }
 
-// 所有名次：越转越慢，慢慢滑过头，速度降到 0 后像被重力拖着，从零开始慢慢往回倒，轻轻停在真正抽中的人身上。
-// 两段的接合处速度都是 0，所以中间没有停顿，也没有突然的跳动，看起来是一段连续的运动。
-async function animateDramatic(endRot, ms) {
-  const over = 0.13 + Math.random() * 0.09;   // 滑过头多少（弧度，约 7.5～12.5 度）
-  const back = 3000;                          // 倒回来用多久（毫秒）：越大越慢
-  await animateTo(endRot + over, Math.max(1200, ms - back));
-  await animateTo(endRot, back, (t) => 0.5 - 0.5 * Math.cos(Math.PI * t));   // 慢起步、慢收尾
+// 所有名次：先快速转，然后慢下来，最后一小段「爬」着走，一格一格慢慢经过名字，越爬越慢，吊着胃口才停下。
+// 没有倒退。两段接合处速度是接上的（第一段结束的速度 = 第二段开始的速度），所以看起来是一段连续的减速。
+async function animateSlowStop(endRot, ms) {
+  const crawl = 0.55 + Math.random() * 0.4;       // 最后「爬」多远（弧度，约 30～55 度）
+  const T2 = Math.min(3600, ms * 0.55);            // 爬行用多久（毫秒）：越大停得越慢
+  const T1 = Math.max(1200, ms - T2);              // 前面快速转的时间
+  const v0 = (3 * crawl) / T2;                     // 爬行起步速度（弧度/毫秒）
+  const D1 = endRot - crawl - rot;                 // 第一段要转多远
+  const m1 = (v0 * T1) / D1;                       // 第一段结束时的归一化速度，用来和第二段接上
+  const m0 = 2.4;                                  // 起步速度（越大一开始转得越猛）
+  // 三次 Hermite：起点斜率 m0，终点斜率 m1，单调不回头
+  const hermite = (u) => (u * u * u - 2 * u * u + u) * m0 + (-2 * u * u * u + 3 * u * u) + (u * u * u - u * u) * m1;
+  await animateTo(endRot - crawl, T1, hermite);
+  await animateTo(endRot, T2, (t) => 1 - Math.pow(1 - t, 3));   // 慢慢爬到停，最后一秒几乎不动
 }
 
 async function doSpin() {
@@ -281,7 +288,7 @@ async function doSpin() {
   stopWinSounds();   // 一按转动，上一首得奖歌马上停
   const list = state.participants.slice();
   const total = list.reduce((s, p) => s + p.tickets, 0);
-  const dramatic = true;   // 第 1～10 名都一样：转动时显示名字 + 滑过头再倒回
+  const dramatic = true;   // 第 1～10 名都一样：转动时显示名字 + 最后慢慢爬着停
   const r = await api('/api/spin', { method: 'POST' });
   if (!r.ok) { $('hint').textContent = r.error || '转不了，稍后再试'; refresh(); return false; }
 
@@ -302,7 +309,7 @@ async function doSpin() {
 
   const spinMs = Math.max(1500, r.animMs - 300);
   revealNames = dramatic;
-  if (dramatic) await animateDramatic(endRot, spinMs); else await animateTo(endRot, spinMs);
+  if (dramatic) await animateSlowStop(endRot, spinMs); else await animateTo(endRot, spinMs);
   revealNames = false;
   stopSfx('spin', 700);
   rot = endRot % TAU;
