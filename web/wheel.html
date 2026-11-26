@@ -148,14 +148,20 @@ const RAND_CUT_MS = 6000;    // 第 4～10 名的音效最多播到第 6 秒
 const RAND_FADE_MS = 900;    // 最后这段时间淡出（所以大约 5.1 秒开始变小声，6 秒结束）
 const fadeTimers = {};
 let lastRand = '';
+let bag = [];
 function sfxFor(place) {
   if (place === 1) return 'win1';
   if (place === 2) return 'win2';
   if (place === 3) return 'win3';
-  let pool = RAND_NAMES.filter((n) => n !== lastRand && !sfx[n].bad);
-  if (!pool.length) pool = RAND_NAMES.filter((n) => !sfx[n].bad);
-  if (!pool.length) pool = ['r1'];
-  lastRand = pool[Math.floor(Math.random() * pool.length)];
+  // 洗牌轮播：每首都播过一遍才会开始重复（7 个名额、6 首歌，最多重复 1 首）
+  const ok = RAND_NAMES.filter((n) => !sfx[n].bad);
+  bag = bag.filter((n) => ok.includes(n));
+  if (!bag.length) {
+    bag = ok.slice();
+    for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+    if (bag.length > 1 && bag[0] === lastRand) bag.push(bag.shift());   // 新一轮第一首不和上一首相同
+  }
+  lastRand = bag.shift() || 'r1';
   return lastRand;
 }
 function sfxMs(name) { const d = sfx[name].duration; return (isFinite(d) && d > 0 ? d : FALLBACK_LEN[name]) * 1000; }
