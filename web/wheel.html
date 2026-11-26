@@ -266,13 +266,13 @@ function animateTo(endRot, ms, easeFn) {
   });
 }
 
-// 前 3 名：先转过头 → 停顿一下 → 慢慢往回倒，停在真正抽中的人身上
+// 前 3 名：越转越慢，慢慢滑过头，速度降到 0 后像被重力拖着，从零开始慢慢往回倒，轻轻停在真正抽中的人身上。
+// 两段的接合处速度都是 0，所以中间没有停顿，也没有突然的跳动，看起来是一段连续的运动。
 async function animateDramatic(endRot, ms) {
-  const over = 0.10 + Math.random() * 0.08;   // 冲过头多少（弧度，约 6～10 度）
-  const hold = 350, back = 1000;
-  await animateTo(endRot + over, Math.max(1200, ms - hold - back));
-  await new Promise((r) => setTimeout(r, hold));
-  await animateTo(endRot, back, (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2));
+  const over = 0.13 + Math.random() * 0.09;   // 滑过头多少（弧度，约 7.5～12.5 度）
+  const back = 1800;                          // 倒回来用多久（毫秒）：越大越慢
+  await animateTo(endRot + over, Math.max(1200, ms - back));
+  await animateTo(endRot, back, (t) => 0.5 - 0.5 * Math.cos(Math.PI * t));   // 慢起步、慢收尾
 }
 
 async function doSpin() {
