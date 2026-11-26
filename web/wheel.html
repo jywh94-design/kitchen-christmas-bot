@@ -266,11 +266,11 @@ function animateTo(endRot, ms, easeFn) {
   });
 }
 
-// 前 3 名：越转越慢，慢慢滑过头，速度降到 0 后像被重力拖着，从零开始慢慢往回倒，轻轻停在真正抽中的人身上。
+// 所有名次：越转越慢，慢慢滑过头，速度降到 0 后像被重力拖着，从零开始慢慢往回倒，轻轻停在真正抽中的人身上。
 // 两段的接合处速度都是 0，所以中间没有停顿，也没有突然的跳动，看起来是一段连续的运动。
 async function animateDramatic(endRot, ms) {
   const over = 0.13 + Math.random() * 0.09;   // 滑过头多少（弧度，约 7.5～12.5 度）
-  const back = 2000;                          // 倒回来用多久（毫秒）：越大越慢
+  const back = 3000;                          // 倒回来用多久（毫秒）：越大越慢
   await animateTo(endRot + over, Math.max(1200, ms - back));
   await animateTo(endRot, back, (t) => 0.5 - 0.5 * Math.cos(Math.PI * t));   // 慢起步、慢收尾
 }
@@ -281,7 +281,7 @@ async function doSpin() {
   stopWinSounds();   // 一按转动，上一首得奖歌马上停
   const list = state.participants.slice();
   const total = list.reduce((s, p) => s + p.tickets, 0);
-  const dramatic = state.nextPlace !== null && state.nextPlace <= 3;   // 前 3 名才有紧张演出
+  const dramatic = true;   // 第 1～10 名都一样：转动时显示名字 + 滑过头再倒回
   const r = await api('/api/spin', { method: 'POST' });
   if (!r.ok) { $('hint').textContent = r.error || '转不了，稍后再试'; refresh(); return false; }
 
