@@ -132,17 +132,29 @@ let autoOn = false;                            // 自动抽剩下名额（每次
 
 /* ---------- 音效 ---------- */
 const sfx = {};
-function load(name, file) { const a = new Audio('/wheel-assets/' + file); a.preload = 'auto'; sfx[name] = a; return a; }
+// 文件没放进 web/assets（或加载失败）时标记为 bad，随机抽音效时会自动跳过它
+function load(name, file) {
+  const a = new Audio('/wheel-assets/' + file); a.preload = 'auto';
+  a.addEventListener('error', () => { a.bad = true; });
+  sfx[name] = a; return a;
+}
 load('spin', 'sfx-spin.mp3').loop = true;
 load('win1', 'sfx-win1.mp3'); load('win2', 'sfx-win2.mp3'); load('win3', 'sfx-win3.mp3');
 load('r1', 'sfx-rand1.mp3'); load('r2', 'sfx-rand2.mp3'); load('r3', 'sfx-rand3.mp3'); load('r4', 'sfx-helicopter.mp3');
-const FALLBACK_LEN = { win1: 29.1, win2: 7.5, win3: 8.6, r1: 1.0, r2: 2.4, r3: 4.3, r4: 10.1 };
+load('r5', 'sfx-beautiful.mp3'); load('r6', 'sfx-dubist.mp3');
+const FALLBACK_LEN = { win1: 29.1, win2: 7.5, win3: 8.6, r1: 1.0, r2: 2.4, r3: 4.3, r4: 10.1, r5: 59.4, r6: 7.3 };
+const RAND_NAMES = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6'];   // 第 4～10 名随机轮播
+const RAND_CUT_MS = 6000;    // 第 4～10 名的音效最多播到第 6 秒
+const RAND_FADE_MS = 900;    // 最后这段时间淡出（所以大约 5.1 秒开始变小声，6 秒结束）
+const fadeTimers = {};
 let lastRand = '';
 function sfxFor(place) {
   if (place === 1) return 'win1';
   if (place === 2) return 'win2';
   if (place === 3) return 'win3';
-  const pool = ['r1', 'r2', 'r3', 'r4'].filter((n) => n !== lastRand);
+  let pool = RAND_NAMES.filter((n) => n !== lastRand && !sfx[n].bad);
+  if (!pool.length) pool = RAND_NAMES.filter((n) => !sfx[n].bad);
+  if (!pool.length) pool = ['r1'];
   lastRand = pool[Math.floor(Math.random() * pool.length)];
   return lastRand;
 }
@@ -354,7 +366,7 @@ function render() {
   if (state.status === 'idle') {
     btn.disabled = spinning || needOrder;
     btn.textContent = needOrder ? '等待决定顺序' : '开始转动';
-    if (!spinning) $('ticker').textContent = next ? `现在抽取：第 ${next} 位` : ' ';
+    if (!spinning) $('ticker').textContent = next ? `现在抽取：第 ${next} 位` : ' ';
     hint.textContent = showPrize && state.upgraded && next && next <= state.upgradeTop ? '🌟 这一位将获得「主厨豪华至尊大礼」！' : '';
   } else if (state.status === 'done') {
     btn.disabled = true; btn.textContent = '开奖完成';
@@ -362,7 +374,7 @@ function render() {
     hint.textContent = state.winners.length < state.target ? `有 ${state.target - state.winners.length} 个名额因无人在场而空缺` : '恭喜以上所有幸运伙伴！';
   } else {
     btn.disabled = true; btn.textContent = '确认中…';
-    if (!spinning) $('ticker').textContent = next ? `第 ${next} 位 确认中` : ' ';
+    if (!spinning) $('ticker').textContent = next ? `第 ${next} 位 确认中` : ' ';
     hint.textContent = '';
   }
 
@@ -428,6 +440,11 @@ function showResult(ev) {
     const next = state.nextPlace;
     showOverlay({ avatarUrl: ev.avatarUrl, name: ev.name, title: `第 ${place} 位得奖`, plate, bar: next ? `下一位：第 ${next} 位` : '开奖完成' });
     playSfx(snd);
+    // 第 4～10 名：音效超过 6 秒的，到第 6 秒前淡出（短的照常播完）
+    if (!top && len > RAND_CUT_MS) {
+      clearTimeout(fadeTimers[snd]);
+      fadeTimers[snd] = setTimeout(() => stopSfx(snd, RAND_FADE_MS), RAND_CUT_MS - RAND_FADE_MS);
+    }
     let revealAt = 0;
     const first = place === 1;
     if (top) {
@@ -448,7 +465,7 @@ function showResult(ev) {
     }
     setTimeout(burst, revealAt);
     if (first) setTimeout(() => fireworks(8000), revealAt);
-    const hold = first ? 15000 : top ? len + 2500 : Math.max(5500, len + 1500);
+    const hold = first ? 15000 : top ? len + 2500 : Math.max(5500, Math.min(len, RAND_CUT_MS) + 1500);
     busyUntil = Date.now() + hold;
     overlayTimer = setTimeout(() => { hideOverlay(); hiddenPlaces.delete(place); if (first) stopSfx(snd, 1500); if (state) render(); }, hold);
     if (top) setTimeout(() => { hiddenPlaces.delete(place); if (state && !spinning) render(); }, revealAt + 1000);

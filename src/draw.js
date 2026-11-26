@@ -5,7 +5,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags
 const cfg = require('./config');
 const { pool, getAllParticipantsSummary } = require('./db');
 const { winnersFor } = require('./rules');
-const { resolveMembers } = require('./members');
+const { resolveMembers, filterPresent } = require('./members');
 
 const ANIM_MS = Number(process.env.WHEEL_ANIM_MS) || 7000; // 转盘转动时间
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -144,7 +144,12 @@ async function handleVoteButton(interaction) {
 
 // 创建一场开奖。正式开奖会读取已保存的得奖者，中途断线也能接着抽。
 async function createSession({ guild, channel, voiceChannel, testMode }) {
-  const { participants, totalServerTickets, totalEntryUsers } = await getAllParticipantsSummary();
+  const all = await getAllParticipantsSummary();
+  // 已经退群的人不占转盘位置，也不算入场人数 / 总签数（他回来后，下次开奖自然又会算回来）
+  const present = await filterPresent(guild, all.participants.map((p) => p.userId));
+  const participants = all.participants.filter((p) => present.has(p.userId));
+  const totalEntryUsers = participants.length;
+  const totalServerTickets = participants.reduce((sum, p) => sum + p.totalTickets, 0);
   if (participants.length === 0) throw new Error('NO_PARTICIPANTS');
 
   const target = Math.min(winnersFor(totalEntryUsers), participants.length);

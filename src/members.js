@@ -42,4 +42,24 @@ async function resolveMembers(guild, ids) {
   return result;
 }
 
-module.exports = { resolveMembers };
+// 查出这些人里「还在服务器里」的（退群的人不该占转盘位置）。
+// 某一批查询失败时，这一批先当作都还在：宁可多留，也不要误把在群的人踢出转盘。
+async function filterPresent(guild, ids) {
+  const present = new Set();
+  const real = [];
+  for (const id of ids) (id.startsWith(FAKE_PREFIX) ? present.add(id) : real.push(id));
+
+  for (let i = 0; i < real.length; i += 100) {
+    const chunk = real.slice(i, i + 100);
+    try {
+      const batch = await guild.members.fetch({ user: chunk, time: 15000 });
+      batch.forEach((m) => present.add(m.id));
+    } catch (err) {
+      console.error('检查成员是否在服务器失败，这一批先当作都还在:', err.message);
+      chunk.forEach((id) => present.add(id));
+    }
+  }
+  return present;
+}
+
+module.exports = { resolveMembers, filterPresent };
