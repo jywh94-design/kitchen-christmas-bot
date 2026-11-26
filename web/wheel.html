@@ -266,10 +266,23 @@ function animateTo(endRot, ms, easeFn) {
   });
 }
 
+// 爬行距离：30～75 度。分成 5 档（每档 9 度宽），洗牌后轮流用、档内再随机，
+// 所以连续几次不会都差不多；5 次之内每一档都会出现一遍。
+let crawlBag = [], lastCrawlBand = -1;
+function nextCrawl() {
+  if (!crawlBag.length) {
+    crawlBag = [0, 1, 2, 3, 4];
+    for (let i = crawlBag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [crawlBag[i], crawlBag[j]] = [crawlBag[j], crawlBag[i]]; }
+    if (crawlBag[0] === lastCrawlBand) crawlBag.push(crawlBag.shift());   // 新一轮第一档不和上一档相同
+  }
+  lastCrawlBand = crawlBag.shift();
+  return (30 + lastCrawlBand * 9 + Math.random() * 9) * Math.PI / 180;
+}
+
 // 所有名次：先快速转，然后慢下来，最后一小段「爬」着走，一格一格慢慢经过名字，越爬越慢，吊着胃口才停下。
 // 没有倒退。两段接合处速度是接上的（第一段结束的速度 = 第二段开始的速度），所以看起来是一段连续的减速。
 async function animateSlowStop(endRot, ms) {
-  const crawl = 0.55 + Math.random() * 0.4;       // 最后「爬」多远（弧度，约 30～55 度）
+  const crawl = nextCrawl();                      // 最后「爬」多远（弧度，30～75 度，每次都不太一样）
   const T2 = Math.min(3600, ms * 0.55);            // 爬行用多久（毫秒）：越大停得越慢
   const T1 = Math.max(1200, ms - T2);              // 前面快速转的时间
   const v0 = (3 * crawl) / T2;                     // 爬行起步速度（弧度/毫秒）
