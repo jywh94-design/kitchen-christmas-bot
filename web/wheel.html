@@ -181,6 +181,12 @@ function stopSfx(name, fadeMs) {
   })(t0);
 }
 
+// 开始转下一个时：还在播的得奖歌快速淡出，不要和转盘的鼓声叠在一起
+function stopWinSounds() {
+  Object.keys(fadeTimers).forEach((k) => clearTimeout(fadeTimers[k]));
+  ['win1', 'win2', 'win3', ...RAND_NAMES].forEach((n) => { if (!sfx[n].paused) stopSfx(n, 400); });
+}
+
 async function api(path, opts, extra) {
   const r = await fetch(path + '?s=' + encodeURIComponent(token) + (extra || ''), opts);
   return r.json();
@@ -268,6 +274,7 @@ async function doSpin() {
 
   spinning = true;
   hideOverlay();
+  stopWinSounds();
   playSfx('spin');
   let start = 0, span = 0;
   for (const p of list) {
