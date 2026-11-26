@@ -184,7 +184,8 @@ function stopSfx(name, fadeMs) {
 // 开始转下一个时：还在播的得奖歌快速淡出，不要和转盘的鼓声叠在一起
 function stopWinSounds() {
   Object.keys(fadeTimers).forEach((k) => clearTimeout(fadeTimers[k]));
-  ['win1', 'win2', 'win3', ...RAND_NAMES].forEach((n) => { if (!sfx[n].paused) stopSfx(n, 400); });
+  RAND_NAMES.forEach((n) => { if (!sfx[n].paused) stopSfx(n, 0); });                  // 第 4～10 名的歌：直接停
+  ['win1', 'win2', 'win3'].forEach((n) => { if (!sfx[n].paused) stopSfx(n, 400); });   // 前 3 名的歌：快速淡出
 }
 
 async function api(path, opts, extra) {
@@ -267,6 +268,7 @@ function animateTo(endRot, ms) {
 async function doSpin() {
   if (spinning || !state || state.status !== 'idle') return false;
   $('spin').disabled = true;
+  stopWinSounds();   // 一按转动，上一首得奖歌马上停
   const list = state.participants.slice();
   const total = list.reduce((s, p) => s + p.tickets, 0);
   const r = await api('/api/spin', { method: 'POST' });
@@ -274,7 +276,6 @@ async function doSpin() {
 
   spinning = true;
   hideOverlay();
-  stopWinSounds();
   playSfx('spin');
   let start = 0, span = 0;
   for (const p of list) {
