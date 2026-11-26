@@ -122,6 +122,7 @@ let overlayTimer = null;
 let busyUntil = 0;                 // 弹窗/音效占用到什么时候（自动抽要等它结束）
 const hiddenPlaces = new Set();    // 还在「揭晓」的名次：名单先不显示
 let autoFails = 0;
+let revealNames = false;           // 前 3 名转动时显示名字（制造紧张感）
 
 /* ---------- 本地小设置（读写失败也不影响使用） ---------- */
 function lsGet(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v === '1'; } catch (e) { return d; } }
@@ -210,7 +211,7 @@ function drawWheel(rotation) {
       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a, a + ang); ctx.closePath();
       ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
       if (list.length > 1) { ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.stroke(); }
-      if (ang > 0.09 && !spinning) {   // 转动时隐藏名字，保持神秘感
+      if (ang > 0.09 && (!spinning || revealNames)) {   // 转动时隐藏名字保持神秘感；前 3 名例外：显示名字制造紧张
         ctx.save();
         ctx.translate(cx, cy); ctx.rotate(a + ang / 2);
         if (Math.cos(a + ang / 2) < 0) ctx.rotate(Math.PI);
@@ -250,19 +251,28 @@ function nameUnderPointer(rotation) {
 }
 
 /* ---------- 转动 ---------- */
-function animateTo(endRot, ms) {
+function animateTo(endRot, ms, easeFn) {
   return new Promise((resolve) => {
     const startRot = rot, t0 = performance.now();
-    const ease = (t) => 1 - Math.pow(1 - t, 4);
+    const ease = easeFn || ((t) => 1 - Math.pow(1 - t, 4));
     function frame(now) {
       const t = Math.min(1, (now - t0) / ms);
       rot = startRot + (endRot - startRot) * ease(t);
       drawWheel(rot);
-      $('ticker').textContent = '抽取中…';
+      $('ticker').textContent = revealNames ? nameUnderPointer(rot) : '抽取中…';
       if (t < 1) requestAnimationFrame(frame); else resolve();
     }
     requestAnimationFrame(frame);
   });
+}
+
+// 前 3 名：先转过头 → 停顿一下 → 慢慢往回倒，停在真正抽中的人身上
+async function animateDramatic(endRot, ms) {
+  const over = 0.10 + Math.random() * 0.08;   // 冲过头多少（弧度，约 6～10 度）
+  const hold = 350, back = 1000;
+  await animateTo(endRot + over, Math.max(1200, ms - hold - back));
+  await new Promise((r) => setTimeout(r, hold));
+  await animateTo(endRot, back, (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2));
 }
 
 async function doSpin() {
@@ -271,6 +281,7 @@ async function doSpin() {
   stopWinSounds();   // 一按转动，上一首得奖歌马上停
   const list = state.participants.slice();
   const total = list.reduce((s, p) => s + p.tickets, 0);
+  const dramatic = state.nextPlace !== null && state.nextPlace <= 3;   // 前 3 名才有紧张演出
   const r = await api('/api/spin', { method: 'POST' });
   if (!r.ok) { $('hint').textContent = r.error || '转不了，稍后再试'; refresh(); return false; }
 
@@ -289,7 +300,10 @@ async function doSpin() {
   const delta = (((targetMod - curMod) % TAU) + TAU) % TAU;
   const endRot = rot + TAU * 6 + delta;
 
-  await animateTo(endRot, Math.max(1500, r.animMs - 300));
+  const spinMs = Math.max(1500, r.animMs - 300);
+  revealNames = dramatic;
+  if (dramatic) await animateDramatic(endRot, spinMs); else await animateTo(endRot, spinMs);
+  revealNames = false;
   stopSfx('spin', 700);
   rot = endRot % TAU;
   spinning = false;
