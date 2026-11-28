@@ -259,7 +259,7 @@ function animateTo(endRot, ms, easeFn) {
       const t = Math.min(1, (now - t0) / ms);
       rot = startRot + (endRot - startRot) * ease(t);
       drawWheel(rot);
-      $('ticker').textContent = revealNames ? nameUnderPointer(rot) : '抽取中…';
+      $('ticker').textContent = state && state.nextPlace ? `现在抽取：第 ${state.nextPlace} 位` : '抽取中…';   // 木牌只写名次，不显示名字
       if (t < 1) requestAnimationFrame(frame); else resolve();
     }
     requestAnimationFrame(frame);
